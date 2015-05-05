@@ -1,0 +1,1427 @@
+<svg       xmlns="http://www.w3.org/2000/svg" width="100%"
+xmlns:xlink="http://www.w3.org/1999/xlink" onload="startup(evt)"
+>
+<script><![CDATA[
+xmlns="http://www.w3.org/2000/svg"
+xlink="http://www.w3.org/1999/xlink"
+var NP
+verbose=true
+globalsmooth=false
+var minX =0 //whitfield
+var minY=0 //whitfield
+var DEBUG
+var FLAG
+var border=[]
+
+//dailey's
+function startup(evt)
+{
+    var myN = 100
+    var solutionType = "SVG"
+    var startTime = (Date.now())
+	var Screen=document.getElementById("s")
+	K=document.getElementById("keep")
+	var B=Screen.getBBox()
+	MaxX=B.width -150
+	MaxY=B.height
+	C=document.getElementById("PC")
+	Temp=document.getElementById("temp")
+	refresh(C, myN)
+	AB=document.getElementById("Ablur")
+    var endTime = (Date.now())
+    console.log(solutionType + "," + "false" + "," + myN + "," + (endTime - startTime))
+    
+}
+function keepIt(){
+	var Q=C.cloneNode(false)
+	K.appendChild(Q)
+	
+}
+function redo(n){
+	refresh(C, n)
+}
+function several(n){
+	verbose=false
+	for(var i=0;i<n;i++){
+		NP=randomPoint()
+		chooseHappyLine()
+	}
+	if (globalsmooth) smooth()
+}
+
+function refresh(C,n){
+	P=[] //array of points (objects having .x and .y properties)
+	path="M "
+	for (var i=0;i<3;i++){
+          var x=Math.floor(Math.random()*MaxX)
+          var y=Math.floor(Math.random()*MaxY)
+          P[i]={x:x, y:y}
+          path+=P[i].x+" "+P[i].y+" "
+	}
+	C.setAttributeNS(null, "d", path+"z")
+	disposePoints()
+	nextline=false //global used to determine whether we want a random line or the next one in succession
+	drawLine({p:{x:0,y:0},q:{x:0,y:0},vertexnum:0}) //set line to upperleft corner
+	several(n)
+	
+}
+
+ 
+function chooseLine(Path){
+	disposePoints()
+     //Path has perfect correspondence to JavaScript array P so let's use P!
+	var b=P.length
+	if (nextline) {vertex=(vertex+1)%b}
+	else{
+		vertex=Math.floor(Math.random()*b)
+		nextline=true
+	}
+	var P1=P[vertex]
+	var P2=P[(vertex+1)%b]
+	var Line={p:P1,q:P2,vertexnum:vertex}
+	drawLine(Line, "red", false)
+	return Line
+}
+function plotPoint(point, color, fresh){
+	var V=document.getElementById("V")
+	var VC=V.cloneNode("false")
+	VC.setAttributeNS(null, "cx", point.x)
+	VC.setAttributeNS(null, "cy", point.y)
+	VC.setAttributeNS(null, "fill", color)
+	if (fresh) Temp.appendChild(VC)
+	else document.documentElement.appendChild(VC)
+	return point
+}
+function drawLine(L, color, fresh){
+	var N=document.getElementById("line")
+	if (fresh) N=N.cloneNode(true)
+	N.setAttribute("d", "M "+L.p.x+" "+L.p.y+" "+L.q.x+" "+L.q.y)
+	N.setAttribute("stroke", color)
+	if (fresh) Temp.appendChild(N)
+}
+function redefine(){
+	var Q=[]
+	var v=globalLine.vertexnum
+	P.splice(v+1,0,NP)
+	makePathfromPoints(P)
+	nextline=false
+}
+function makePathfromPoints(A){
+disposePoints()
+     var path="M "
+     for (var i=0;i<A.length;i++){
+       path+=A[i].x+" "+A[i].y+" "
+    }
+    C.setAttributeNS(null, "d", path+"z")
+	
+}
+function disposePoints(){
+ //var Points=document.getElementsByTagName("circle")
+// var pn=Points.length
+ //for (var i=pn-1;i>0;i--) document.documentElement.removeChild(Points.item(i))
+ var Junk=Temp.childNodes
+ var jn=Junk.length
+ for (var i=jn-1;i>0;i--) Temp.removeChild(Junk.item(i))
+}
+
+function randomPoint(){
+	var randX=Math.random() * MaxX;
+	var randY=Math.random() * MaxY;
+	var pt = {x:Math.floor(randX),y:Math.floor(randY)}
+	if (verbose) plotPoint(pt, "black", true)
+	return pt
+}
+ //dailey's
+ function chooseHappyLine(){
+ 	var nodeList=findHappyPointsfrom(NP)
+	//alert(nodeList)
+	var nL=nodeList.length
+	var nP=P.length
+	var lineList=[]
+	for (var i=0;i<nL;i++){
+		if (((nodeList[i]+1)%nP)==nodeList[(i+1)%nL]) 
+			lineList.push(nodeList[i])
+	
+	}
+	//alert(lineList)
+	if (lineList.length>0){
+		var rn=Math.floor(Math.random()*lineList.length)
+		var r=lineList[rn]
+		P.splice((r+1),0,NP)
+		makePathfromPoints(P)
+	}
+	else 
+	if (verbose) alert("linelist has no elements, nodelist is: "+nodeList)
+ 
+ }
+ function findHappyPointsfrom(point){
+ //test all points of path to see if given point is visible or not
+ //return array of those that have clear view of point
+ 	var pointList=[]
+	for (var i=0;i<P.length;i++){
+		var Line={p:point,q:P[i],vertexnum:i}
+		if (anyLineCross(Line,i)==false) {
+			pointList.push(i)
+			if (verbose) {drawLine(Line, "green", true);
+			plotPoint(P[i],"yellowgreen", true)
+			}
+		}
+		else drawLine(Line, "red", true);
+	}
+	return pointList
+	
+ }
+function anyLineCross(L,v){
+//I prefer Deb's approach since I don't really care for the lineprops object
+//but I know the innards of this one better
+//need to amend this so that adjacent lines are not considered as crossing
+	var b=P.length
+	var found=false
+	//alert(v)
+	for (var i=0;i<b;i++){
+		if ((L.vertexnum==i)||(L.vertexnum==i+1)) {//alert(i);
+		continue}
+		//var Line={p:P1,q:P2,vertexnum:i}
+		var Line=new lineprops(P[i],P[(i+1)%b])
+		var GL=new lineprops(L.p,L.q)
+		var result=Cross(GL,Line)
+		if (result) {
+			if (verbose) {drawLine(Line,"cyan", true); 
+			plotPoint(result, "red", true)}
+			found=true
+		}
+		
+	}
+	return found
+}
+function testCross(point, Gline){
+	var b=P.length
+	for (var i=0;i<b;i++){
+		var Line=new lineprops(P[i],point)
+		var GL=new lineprops(Gline.p,Gline.q)
+		var result=Cross(Line,GL)
+		if (result&&verbose) {drawLine(Line, true); plotPoint(result, "black", true)}
+	}
+}
+ //dailey's
+function lineprops(p,q){
+	if (p.x==q.x) this.slope="undefined"
+	else {
+		this.slope=(p.y - q.y)/(p.x - q.x)
+		this.intercept=p.y - this.slope*p.x 
+	}
+	this.p=p
+	this.q=q
+}
+ //dailey's
+function Cross(L1,L2){
+	if (L1.slope=="undefined") return false
+	if (L1.slope==L2.slope) return false
+	xI=(L1.intercept - L2.intercept)/(L2.slope - L1.slope)
+	yI=L1.slope*xI+L1.intercept
+ //now find if the intersection of lines is in scope of segments
+	if (between(L1.p.x,xI,L1.q.x))
+	if (between(L1.p.y,yI,L1.q.y))
+	if (between(L2.p.x,xI,L2.q.x))
+	if (between(L2.p.y,yI,L2.q.y)){
+		return {x:Math.floor(xI),y:Math.floor(yI)}
+	}
+	else return false
+}
+ 
+//dailey's
+function between(a,b,c){
+ if (Math.min(a,c)<b&&Math.max(a,c)>b) return true
+ else return false
+}
+
+//dailey's -- wrong but cute
+function clump(){
+	var m=[]
+	var n=P.length
+	var path="M "
+	for (var i=0;i<n;i++) {
+		plotPoint(P[i], "black")
+		m[i]={}
+		m[i].x=(P[i].x+P[(i+1)%n].x)/2
+		m[i].y=(P[i].y+P[(i+1)%n].y)/2
+		plotPoint(m[i], "black")
+	}
+	for (var i=0;i<n;i++){
+		path+=m[i].x+" "+m[i].y+" Q "+P[i].x+" "+P[i].y+" "
+	}
+	path+=m[0].x+" "+m[0].y+"z"
+	C.setAttributeNS(null, "d", path)
+	
+}
+//dailey's
+
+function smooth(){
+	var n=P.length
+	var path="M "
+	if (globalsmooth){
+	var m=[]
+	
+	for (var i=0;i<n;i++) {
+		m[i]={}
+		m[i].x=(P[i].x+P[(i+1)%n].x)/2
+		m[i].y=(P[i].y+P[(i+1)%n].y)/2
+		//plotPoint(m[i])
+	}
+	for (var i=0;i<n;i++){
+		path+=m[i].x+" "+m[i].y+" Q "+P[(i+1)%n].x+" "+P[(i+1)%n].y+" "
+	}
+	path+=m[0].x+" "+m[0].y
+	}
+	else{
+		for (var i=0;i<n;i++){
+			path+=P[i].x+" "+P[i].y+" "
+		}
+		
+	}path+="z"
+	C.setAttributeNS(null, "d", path)
+	
+	
+}
+
+//whitfield's
+var ViPrev
+var walkstart  // global
+var newbies, exteriors
+var Coincident
+var Visible2Va, Visible2Vb
+var extndInfo
+function auto() {
+  FLAG = 0
+  var InsideVisible=[], OutsideVisible=[] 
+  newbies=[]
+  exteriors=[]
+  Visible2Va=[]
+  Visible2Vb=[]
+  var ViPrevVisible2Va =0, ViPrevVisible2Vb =0
+  var InsideCnt=0, OutsideCnt=0
+  var i
+  var Points=document.getElementsByTagName("circle")
+  for (i=Points.length-1;i>0;i--) 
+  	document.documentElement.removeChild(Points.item(i))
+  makeBorder() 
+  nextline=false
+  var randLine=chooseLine(P)
+  extend(randLine) 
+  var pathLength = P.length  
+  var Va = randLine.p 
+  var Vb = randLine.q
+  plotPoint(Va, "yellow",false)
+  plotPoint(Vb, "yellow", false)
+
+  var nextVertex = (randLine.vertexnum +1)%pathLength
+  ViPrev = nextVertex
+
+  alert ("Va is x:"+Va.x+" Y is " + Va.y + " Line " + randLine.vertexnum +
+	"\nVb is x:"+Vb.x+" Y is " + Vb.y + " Line " + (randLine.vertexnum+1)%pathLength)
+  calcVisible(randLine)    
+
+  InsideVisible[InsideCnt++]=randLine.vertexnum 
+  OutsideVisible[OutsideCnt++]=randLine.vertexnum
+  pt=P[randLine.vertexnum]
+  NP=plotPoint(pt,"black")
+  InsideVisible[InsideCnt++]=ViPrev
+  OutsideVisible[OutsideCnt++]=ViPrev
+  
+  pt=P[ViPrev]
+  NP=plotPoint(pt,"black")
+  walkstart=1
+  nextVertex= (nextVertex+1)%pathLength
+  for (i=0; i<pathLength-2; i++) //walk the N gon
+  {
+	// if (i!=0) { //testing
+       pt=P[nextVertex]
+       NP=plotPoint(pt,"pink")
+	 //}
+	 if ((Visible2Va[nextVertex].Vis && Visible2Vb[nextVertex].Vis )|| Visible2Va[nextVertex].coinc) //no intersections - visible to both
+	 {
+		 //triangle Va,Vb, nextVertex. Any of Vi inside?
+		 if ((Visible2Va[nextVertex].inside && Visible2Vb[nextVertex].inside ))
+				fourCases(nextVertex, InsideVisible, Visible2Va[ViPrev].inside,Visible2Vb[ViPrev].inside, Va, Vb, false, randLine, InsideVisible,OutsideVisible)	 
+		 else if ((Visible2Va[nextVertex].outside && Visible2Vb[nextVertex].outside ))
+				 fourCases(nextVertex, OutsideVisible, Visible2Va[ViPrev].outside,Visible2Vb[ViPrev].outside, Va, Vb, true, randLine, InsideVisible,OutsideVisible) 
+	 } //end of if Vis
+	
+	 if (i ==1)
+	 {
+	    walkstart =0
+	 }
+	 ViPrev = nextVertex	
+	 nextVertex =(nextVertex+1)%pathLength
+	
+   } //for i loop
+
+   alert("InsideVisible: " + InsideVisible+ " OutsideVisible: " + OutsideVisible + " Newbies (" +newbies.length+") "+ newbies)	
+   var Pprime=[]
+   stitchIt(InsideVisible, OutsideVisible, newbies, Pprime)
+   var result =[]
+   var tri=[]
+  //  Invoke the triangulator to triangulate this polygon.
+  var polyArea=Math.abs(Area(Pprime))
+  randLoc=Math.ceil(Math.random()*polyArea)
+  Process(Pprime,result)
+
+  // print out the results.
+  var tcount = result.length/3
+
+  i=0
+  found=false
+  var areaSum=0, thisArea=0
+  while (i<tcount && !found)
+  {
+    tri[0] = result[i*3+0]
+    tri[1] = result[i*3+1]
+    tri[2] = result[i*3+2]
+	thisArea =Area(tri)
+	areaSum += thisArea 
+	if (randLoc <= areaSum)
+	   found = true
+	else
+	   i++
+  }	
+  NewPoint = getInsidePoint(tri[0],tri[1],tri[2])
+  plotPoint(tri[0],"red", false)
+	plotPoint(tri[1],"red", false)
+	plotPoint(tri[2],"red", false)
+  plotPoint(NewPoint, "yellow")
+  P.splice (randLine.vertexnum+1,0, NewPoint)
+  makePathfromPoints(P)
+}   
+
+function stitchIt(InsideVisible, OutsideVisible, newbies, Pprime)
+{   
+   var Order= " "
+   var newbieIndex=0
+   var i
+   for (i=1;i<InsideVisible.length; i++)
+   {
+	  if (InsideVisible[i]>=P.length)
+	  {
+		  if(Pprime[Pprime.length-1] == newbies[InsideVisible[i]-P.length].p)
+		     continue
+		  Order += " N" + newbies[InsideVisible[i]-P.length].vertexnum
+	      Pprime[Pprime.length] = newbies[InsideVisible[i]-P.length].p
+	  } 
+	  else{ // ran out of Newnodes
+	    if(Pprime[Pprime.length-1] == P[InsideVisible[i]])
+		  continue
+	    Order += " " + InsideVisible[i]
+	    Pprime[Pprime.length] = P[InsideVisible[i]]
+	  }
+   }
+   if (Pprime[Pprime.length-1] != InsideVisible[0]){
+     Order += " " + InsideVisible[0]
+     Pprime[Pprime.length] = P[InsideVisible[0]]
+   }
+   for (i=OutsideVisible.length-1; i>1; i--)
+   {
+      if (OutsideVisible[i]>=P.length)
+	  {
+	      if(Pprime[Pprime.length-1] == newbies[OutsideVisible[i]-P.length].p)
+		     continue
+		  Order += " N" + newbies[OutsideVisible[i]-P.length].vertexnum
+	      Pprime[Pprime.length] = newbies[OutsideVisible[i]-P.length].p
+	  }
+	  else
+	  { 
+	    if(Pprime[Pprime.length-1] == P[OutsideVisible[i]])
+		  continue
+		Pprime[Pprime.length] = P[OutsideVisible[i]]
+	    Order += " " + OutsideVisible[i]
+	  }
+   }
+ /*  for (i=0; i<exteriors.length; i++)
+     alert ("Splice in "+exteriors[i].vertexnum+","+exteriors[i].id)
+
+ */
+alert ("Pprime in orange. exteriors in yellow. Ordering is "+ Order)
+ for (i=0; i< Pprime.length; i++)
+ {
+   alert (i)
+   plotPoint (Pprime[i],"orange",false)
+ }
+ for (i=0; i<exteriors.length; i++){
+     Pprime[Pprime.length]=exteriors[i].p
+     alert(i + " " + exteriors[i].p.x+","+ exteriors[i].p.y)
+     plotPoint (exteriors[i].p, 'yellow', false) }
+
+}
+
+//extend and place in Visible
+function extend(VaVb)
+{
+   var i=(VaVb.vertexnum+2)%P.length
+   var tempDistVa, tempDistVb
+   var dist2Va, index4Va=-1, VaIntrsctPt={x:-1,y:-1}
+   var dist2Vb, index4Vb=-1, VbIntrsctPt={x:-1, y:-1}
+   var large = MaxY
+   if (MaxX > MaxY)
+       large = MaxX 
+   dist2Va=large
+   dist2Vb=large
+   for (j=0; j<P.length-3; j++)
+   {
+	  pathLine={p:P[i],q:P[(i+1)%P.length], vertexnum:i}
+	  thePoint=testLineSeg(VaVb, pathLine)
+	  if (thePoint.x != -1){
+		   tempDistVa = dist(VaVb.p,thePoint)
+		   tempDistVb = dist(VaVb.q,thePoint)
+		   if (tempDistVa <tempDistVb && tempDistVa < dist2Va)
+		   {
+		     dist2Va=tempDistVa
+			 index4Va=i
+			 VaIntrsctPt = thePoint
+		   }
+		   else if (tempDistVb < tempDistVa && tempDistVb < dist2Vb)
+		   {
+		     dist2Vb=tempDistVb
+			 index4Vb=i
+			 VbIntrsctPt=thePoint
+		   }
+      }
+	  i=(i+1)%P.length
+   }// end of for
+   for (i=0; i<4; i++)
+   {
+	  thePoint=testLineSeg(VaVb, border[i])
+	  if (thePoint.x != -1){
+		   tempDistVa = dist(VaVb.p,thePoint)
+		   tempDistVb = dist(VaVb.q,thePoint)
+		   if (tempDistVa <tempDistVb && tempDistVa < dist2Va)
+		   {
+		     dist2Va=tempDistVa
+			 index4Va=P.length+i
+			 VaIntrsctPt = thePoint
+		   }
+		   else if (tempDistVb < tempDistVa && tempDistVb < dist2Vb)
+		   {
+		     dist2Vb=tempDistVb
+			 index4Vb=P.length+i
+			 VbIntrsctPt=thePoint
+		   }
+      }
+   }// end of for
+//splice in points
+   
+  for(i=P.length-1; i >= 0; i--)
+   {
+     if (index4Va == i){
+          if(index4Vb>=P.length) index4Vb++	 
+      	  P.splice (index4Va+1,0, VaIntrsctPt)
+	 }
+	 if (index4Vb == i){
+	  if(index4Va>=P.length) index4Va++	 
+	  P.splice (index4Vb+1,0, VbIntrsctPt)
+	 } 
+   }
+  
+   //fix VaVb
+   if (index4Va < VaVb.vertexnum)
+	    VaVb.vertexnum++
+   if (index4Vb < VaVb.vertexnum)
+	    VaVb.vertexnum++
+  //find border cells
+  point={x:-1, y:-1}
+  if (index4Va >= 0 && index4Vb >= 0)
+       var b=true
+  else
+  		var b=false
+  
+   if (index4Va >= P.length) 
+     exteriors[exteriors.length] = {p:VaIntrsctPt, vertexnum:VaVb.vertexnum-1, id:0} // before Va
+   if (index4Va >= P.length || index4Vb >=P.length) 
+   {
+	 for (i=0; i<4; i++)
+	 {
+	    point=border[i].p
+	   if (checkCorner (VaVb.p, VaVb.q, point))
+	     exteriors[exteriors.length] = {p:point, vertexnum: VaVb.vertexnum-1, id:1}// splice after theLine
+	 }
+	 point={x:-1, y:-1}
+   } 
+   if (exteriors.length >0)
+     var frst=true
+   else
+     var frst =false
+   if (index4Vb >= P.length )
+ 	exteriors[exteriors.length] = {p:VbIntrsctPt, vertexnum:VaVb.vertexnum, id:2} //afterVb
+   if (exteriors.length >3) // check relative order of border
+   {
+     if(exteriors[1].p.x == exteriors[2].p.x){
+	   if (exteriors[0].p.y != exteriors[1].p.y)
+	   { var temp = exteriors[1]
+	     exteriors[1] = exteriors[2]
+		 exteriors[2] = temp
+	   }
+	 }
+	 else // y's are equal so swap if exteriors[0].x
+	   if (exteriors[0].p.x != exteriors[1].p.x)
+	   { var temp = exteriors[1]
+	     exteriors[1] = exteriors[2]
+		 exteriors[2] = temp
+	   }
+   }
+   if (exteriors.length==0)
+     var n = true
+   else
+     var n = false
+   extndInfo={both:b , VaFirst:frst , neither:n }
+}
+
+function calcVisible(VaVb)
+{
+  var Va=VaVb.p
+  var Vb=VaVb.q
+  nextVertexVa=(VaVb.vertexnum+2)%P.length
+  nextVertexVb=(VaVb.vertexnum+3)%P.length
+  for (i=0; i<P.length-1; i++) //walk the N gon
+  {
+     VaVis=checkEach(nextVertexVa, Va) 
+     if (VaVis == 0)
+	 {
+	    midPoint={x:(Va.x+P[nextVertexVa].x)/2, y: (Va.y+P[nextVertexVa].y)/2}
+	    if (intersectionCount( {p:midPoint, q:{x:minX,y:minY}, vertexnum:P.length} ) %2 == 0)
+		  Visible2Va[nextVertexVa]={Vis:true, inside:false, outside:true, both:false, coinc:Coincident}
+		else  
+		  Visible2Va[nextVertexVa]={Vis:true, inside:true, outside:false, both:false, coinc:Coincident} 
+	 }
+	 else
+	  	 Visible2Va[nextVertexVa]={Vis:false, inside:false, outside:false, both:false, coinc:Coincident}
+	 
+	 VbVis=checkEach(nextVertexVb, Vb)
+	 if (VbVis == 0)
+	 {
+	    midPoint={x:(Vb.x+P[nextVertexVb].x)/2, y: (Vb.y+P[nextVertexVb].y)/2}
+	    if (intersectionCount( {p:midPoint, q:{x:minX,y:minY}, vertexnum:P.length} ) %2 == 0)
+		  Visible2Vb[nextVertexVb]={Vis:true, inside:false, outside:true, both:false, coinc:Coincident}
+		else  
+		  Visible2Vb[nextVertexVb]={Vis:true, inside:true, outside:false, both:false, coinc:Coincident} 
+	 }
+	 else
+	  	 Visible2Vb[nextVertexVb]={Vis:false, inside:false, outside:false, both:false, coinc:Coincident}
+	 nextVertexVa =(nextVertexVa+1)%P.length
+	 nextVertexVb =(nextVertexVb+1)%P.length
+  }
+  if (VaVb.vertexnum == 0)
+      Visible2Va[P.length-1]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  else
+    Visible2Va[(VaVb.vertexnum-1)%P.length]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  Visible2Va[VaVb.vertexnum]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  Visible2Va[(VaVb.vertexnum+1)%P.length]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  if (VaVb.vertexnum == P.length-1)
+      Visible2Vb[P.length-1]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  else
+    Visible2Vb[VaVb.vertexnum]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident}
+  Visible2Vb[(VaVb.vertexnum+2)%P.length]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident} //Vb.next
+  Visible2Vb[(VaVb.vertexnum+1)%P.length]={Vis:true, inside: true, outside:true, both:true, coinc:Coincident} //Vb
+}
+
+function fourCases (nextVertex, Visible, ViPrevVisible2Va, ViPrevVisible2Vb, Va, Vb, exterior, InsideVis, OutsideVis)
+{
+    var curLength=Visible.length
+	if (walkstart == 1){
+	   ViPrevVisible2Vb = -1
+	   walkstart = 0
+	 }
+
+		 DEBUG = 0
+			 if (Visible[Visible.length-2] == ViPrev || ViPrevVisible2Vb == -1)// case 1
+			   ViPrev = nextVertex
+			 else if (!ViPrevVisible2Va  && !ViPrevVisible2Vb  ) {// case 2
+			   alert ("examining "+nextVertex +" from prev, neither Va nor Vb visible")
+			  
+			     if (curLength >1) {
+				  showIntersections({p:P[Visible[curLength-1]], q:Vb, vertexnum:P.length}, Va, Visible, exterior, InsideVis, OutsideVis)
+				  showIntersections({p:P[Visible[curLength-1]], q:Va, vertexnum:P.length}, Vb, Visible, exterior, InsideVis, OutsideVis)
+				}
+				showIntersections({p:P[nextVertex], q:Va, vertexnum:P.length}, Vb, Visible, exterior, InsideVis, OutsideVis)
+			    showIntersections({p:P[nextVertex], q:Vb, vertexnum:P.length}, Va, Visible, exterior, InsideVis, OutsideVis)
+			 }
+			 else if (!ViPrevVisible2Va ){
+			   alert ("examining "+nextVertex +" previously, Va not visible")
+			   showIntersections({p:P[nextVertex], q:Va, vertexnum:P.length}, Vb, Visible, exterior, InsideVis, OutsideVis)
+			   if (curLength >1)
+			     showIntersections({p:P[Visible[curLength-1]], q:Va, vertexnum:P.length}, Vb, Visible, exterior, InsideVis, OutsideVis)
+			 }  
+			 else if ( !ViPrevVisible2Vb ){
+			   alert ("examining "+nextVertex +" previously, Vb not visible")
+			   showIntersections({p:P[nextVertex], q:Vb, vertexnum:P.length}, Va, Visible, exterior, InsideVis, OutsideVis)
+			   if (curLength >1)
+			    showIntersections({p:P[Visible[curLength-1]], q:Vb, vertexnum:P.length}, Va, Visible, exterior, InsideVis, OutsideVis)
+			 }  
+			 Visible[Visible.length]=nextVertex
+	     	 pt=P[nextVertex]
+	         NP=plotPoint(pt,"black")
+		DEBUG = 0
+    
+}
+//whitfield's - find an interior point of a triangle
+//used to determine if point is visible from inside or outside
+function getInsidePoint(a, b, c){
+               
+   r=[]
+   r[0]=Math.random()
+   r[1]=Math.random()
+               
+   if (r[0]+r[1]>1)	 {
+      r[0]=1-r[0]
+	  r[1]=1-r[1]
+   }
+   r[2]=1-r[0]-r[1]
+   ax=r[0]*a.x+r[1]*b.x+r[2]*c.x
+   ay=r[0]*a.y+r[1]*b.y+r[2]*c.y
+   return {x:ax,y:ay}         
+}
+//whitfield's
+//Is any of Vi in triangle
+function checkCorner (Va, Vb, otherVertex)
+{ 
+   var intersectCount=0;
+   var i
+   midVaVb={p:{x:(Vb.x+Va.x)/2, y: (Vb.y+Va.y)/2}, q:otherVertex, vertexnum:P.length}
+   LineVbOther={p:Vb,q:otherVertex,vertexnum:P.length}
+   LineOtherVa={p:Va,q:otherVertex,vertexnum:P.length}
+   for (i=0; i<P.length; i++)
+   {
+	  pathLine={p:P[i], q:P[(i+1)%P.length], vertexnum:i}
+	  if (P[i] != Vb &&P[(i+1)%P.length] != Vb) // don't test Vb against itself
+	  {
+	   ans=test2Segs(LineVbOther,pathLine)
+	   if (ans.x !=-1)
+	    intersectCount++
+	  }
+	  if (P[i] != Va && P[(i+1)%P.length] != Va) // don't test Va against itself 
+	  {
+	    ans=test2Segs(LineOtherVa,pathLine)
+	    if (ans.x !=-1)
+	       intersectCount++
+	  }
+	  if (P[i] != Va ) // don't test midpoint agianst VaVb 
+	  { 
+	    ans=test2Segs(midVaVb,pathLine)
+	    if (ans.x !=-1)
+	      intersectCount++
+	  }
+	  if (intersectCount >0)
+	    return false
+   }
+   return true
+}
+
+function showIntersections(theLine, VaORb, Visible, exterior, InsideVis, OutsideVis)
+{ 
+   DEBUG=0
+   FLAG =1
+   var i
+   var found = false
+   for (i=0; i<P.length && !found; i++)
+   {
+      pathLine={p:P[i],q:P[(i+1)%P.length], vertexnum:i}
+	  //don't test if P[i] is Va, Vb, or otherVertex
+	  if (theLine.p == pathLine.p || theLine.p == pathLine.q || theLine.q== pathLine.p ||theLine.q == pathLine.q)
+	  		continue
+	  thePoint=testLineSeg(theLine, pathLine)
+	  if (checkAnswer (thePoint, VaORb, pathLine))
+	  {
+	    alert("  "+i+ ": "+thePoint.x+","+thePoint.y)
+	   newbies[newbies.length] = {vertexnum:i, p:{x:thePoint.x, y:thePoint.y}}
+       if (exterior)
+			    OutsideVis[Visible.length]=P.length+newbies.length-1
+		else
+			    InsideVis[Visible.length]=P.length+newbies.length-1
+		found=true
+	  }
+   }
+   if (exterior && !extndInfo.both)  //Only check border if exteriorly visible and not already done
+     for (i=0; i<4; i++)
+     {
+       ans=testLineSeg(theLine, border[i])
+	   if (member(ans))
+	     continue
+       if (checkAnswer (ans, VaORb, border[i]))
+	   {
+	     if (extndInfo.neither || extndVaFirst)
+		   exteriors[exteriors.length]={p:{x:roundIt(ans.x),y:roundIt(ans.y)}, vertexnum:P.length+i , id:-1}
+		 else 
+		   exteriors.splice({p:{x:roundIt(ans.x),y:roundIt(ans.y)}, vertexnum:P.length+i , id:-1} ,0, 0)
+	   }
+     }
+    DEBUG=0 
+   FLAG =0
+   //   extndInfo={both:b , VaFirst:frst , neither:n }
+} 
+function member(point)
+{
+  var temp=point
+  temp.x = roundIt(temp.x)
+  temp.y = roundIt(temp.y)
+  for (var i=0; i< exteriors.length; i++)
+    if (temp == exteriors[i].p)
+	   return true
+  return false
+}
+function  checkAnswer (thePoint, VaORb, thisSegmentNOT)
+{
+  var count
+ // thePoint.x = roundIt(thePoint.x)
+//  thePoint.y = roundIt(thePoint.y)
+	
+  if (thePoint.x >= minX && thePoint.x <=MaxX && thePoint.y >= minY && thePoint.y <=MaxY){
+	     FLAG=0
+		// pt={x:ans.x, y:ans.y}
+		 //does line segment pt,VaOrb intersect anything BUT don't count a vertex!!
+		 count = segmentIntersectionCount({p:thePoint,q:VaORb, vertexnum:P.length}, thisSegmentNOT)
+		 if (DEBUG == 1)
+		   alert ("intersection count: " + count)
+      //   alert ("Plot x: "+ans.x+ " y:"+ans.y)
+	     FLAG=1
+		 if (count != 0){
+	        plotPoint(thePoint,"blue", false)  
+			return false
+			}
+		 else{
+		    plotPoint(thePoint, "black", false)
+			return true
+		}
+   }
+ }
+ 
+ //count intersections for line segments
+function segmentIntersectionCount(theLine, NOTthisSegment)
+{ 
+   var Segcount, ans
+   Segcount=0
+   var i
+   for (i=0; i<P.length; i++)
+   {
+      pathLine={p:P[i],q:P[(i+1)%P.length], vertexnum:i}
+	  if (pathLine == NOTthisSegment){
+	     alert ("here")
+	     continue
+	}  ans=test2Segs(theLine, pathLine)
+	 
+	  ans.x=roundIt(ans.x)
+	  ans.y==roundIt(ans.y)
+	  //don't count vertices
+	  if (ans == theLine.p || ans == theLine.q || ans == pathLine.p || ans == pathLine.q)
+	     continue
+	  for (var j=0; j<P.length; j++)
+	    if (ans.x ==P[j].x && ans.y ==P[j].y) // found a vertex dont count
+		   ans.x=-1
+	  if (ans.x !=-1)
+	  {
+	    Segcount++;  
+		if (DEBUG == 1){ plotPoint(ans, "orange") }
+	  }
+   }
+   return Segcount
+} 
+//count intersections for interior/exterior determination
+function intersectionCount(theLine)
+{ 
+   var count, ans
+   count=0
+   var i
+   for (i=0; i<P.length; i++)
+   {
+      pathLine={p:P[i],q:P[(i+1)%P.length], vertexnum:i}
+	  //don't test if P[i] is Va, Vb, or otherVertex
+	  if (theLine.p == pathLine.p || theLine.p == pathLine.q || theLine.q== pathLine.p ||theLine.q == pathLine.q)
+	  		continue
+	  ans=intersectionTest(theLine, pathLine)
+	  if (ans.x !=-1)
+	    count++;  
+   }
+   return count
+} 
+//whitfield's
+// check Each vertex to determine if both Va and Vb can see it
+function checkEach(checkVertex, Vab)
+{
+  var ans
+  var intersectCount=0;
+ // extndedCount=0;
+  var pathLength=P.length
+  var nextVertex=(checkVertex+1)%pathLength
+  Coincident=false
+  Line2Vab={p:Vab,q:P[checkVertex],vertexnum:checkVertex}
+
+  for (j=0; j<pathLength-1; j++)
+  { 
+	 newLine={p:P[nextVertex], q:P[(nextVertex+1)%pathLength], vertexnum:nextVertex}
+	 ans = intersectionTest(Line2Vab, newLine)  //test with new line
+	 if(uANum==0 &&uBNum ==0 && denom ==0)
+	   Coincident= true
+	 if (ans.x != -1)
+     {
+	   	intersectCount++
+	 }
+	 nextVertex =(nextVertex+1)%pathLength
+   }   // for loop
+   return intersectCount
+}
+
+var uA, uB, denom, uANum, uBNum
+var P1, P2, P3, P4
+//whitfield's
+function intersectionTestBasic(Line1, Line2)
+{
+  P1 = Line1.p
+  P2 = Line1.q
+  P3 = Line2.p
+  P4 = Line2.q
+   xIntrsct=-1, yIntrsct=-1 // global
+             
+	denom = (P4.y - P3.y)*(P2.x-P1.x) - (P4.x-P3.x)*(P2.y - P1.y)
+	uANum=(P4.x-P3.x)*(P1.y-P3.y) - (P4.y-P3.y)*(P1.x-P3.x)
+	uBNum=(P2.x-P1.x)*(P1.y-P3.y) - (P2.y-P1.y)*(P1.x-P3.x)
+	if (denom != 0){
+  	  uA = uANum/denom
+      uB = uBNum/denom
+	  xIntrsct = P1.x + uA*(P2.x-P1.x)
+      yIntrsct = P1.y + uA*(P2.y-P1.y)
+	}
+}
+function intersectionTest(Line1, Line2)
+{
+	intersectionTestBasic(Line1, Line2)
+	if (DEBUG==1)
+	   alert ("Intersects at x:" + xIntrsct + " y:"+yIntrsct)
+	if (FLAG == 1 ){  //line segment (Line1) vs line (Line2)test
+	 if (uB >=0 && uB <=1)
+	   return {x:xIntrsct, y:yIntrsct}
+	 else {  
+		 return {x:-1, y:-1}
+	 }	 
+	
+	} 
+	if ((P1.x == P3.x && P1.y == P3.y )||(P1.x == P4.x && P1.y == P4.y ) // skip if endpoints meet
+   		|| (P2.x == P3.x && P2.y == P3.y )|| (P2.x == P4.x && P2.y == P4.y ))
+	 {
+		return {x:-1, y:-1}
+	 }
+     
+  if (denom == 0) //hmmm what shouls I do here?
+    return {x:xIntrsct, y:yIntrsct}
+
+  if (uA <0 || uB < 0 || uA >1 || uB >1)   /// line segment test - both lines are segements
+    return {x:-1, y:-1}
+  return {x:xIntrsct, y:yIntrsct}
+}
+function test2Segs(Seg1, Seg2)
+{
+ intersectionTestBasic(Seg1, Seg2)
+ if (denom == 0) //hmmm what should I do here?
+    return {x:-9999, y:-9999}
+ if (uA <0 || uB < 0 || uA >1 || uB >1)   /// line segment test - both lines are segements
+    return {x:-1, y:-1}
+  else	
+    return {x:xIntrsct, y:yIntrsct}
+}
+function test2Lines(Line1, Line2)
+{ 
+ intersectionTestBasic(Line1, Line2)
+ if (denom == 0) //hmmm what shouls I do here?
+    return {x:-9999, y:-9999}
+ else
+	return {x:xIntrsct, y:yIntrsct}
+}
+function testLineSeg(Line1, Seg2)
+{ 
+  intersectionTestBasic(Line1, Seg2)
+  if (denom == 0) //hmmm what shouls I do here?
+    return {x:-9999, y:-9999}
+  if (uB >=0 && uB <=1) // 
+	   return {x:xIntrsct, y:yIntrsct}
+  else {  
+      //   alert ("not On line x:" + xIntrsct + " y:"+yIntrsct)
+		 pt={x:xIntrsct, y:yIntrsct}
+        
+	  //  plotPoint(pt,"red", true) 
+		 return {x:-1, y:-1}
+	 }
+}
+function dist(point1,point2)
+{
+  return Math.sqrt ((point2.x-point1.x)*(point2.x-point1.x) + (point2.y-point1.y)*(point2.y-point1.y))
+}
+//Create global path border
+function makeBorder()
+{
+   border[0]={p:{x:minX, y:minY},q:{x:minX, y:MaxY}, vertexnum:P.length}
+   border[1]={p:{x:minX, y:MaxY},q:{x:MaxX, y:MaxY}, vertexnum:P.length}
+   border[2]={p:{x:MaxX, y:MaxY},q:{x:MaxX, y:minY}, vertexnum:P.length}
+   border[3]={p:{x:MaxX, y:minY},q:{x:minX, y:minY}, vertexnum:P.length}
+}
+function roundIt(someFloat)
+{
+  if( ((someFloat*10) % 10 ) >= 5)
+    someFloat++
+  return parseInt(someFloat)
+}
+//Whitfield translated cpp code into javascript
+// COTD Entry submitted by John W. Ratcliff [jratcliff@verant.com]
+
+// ** THIS IS A CODE SNIPPET WHICH WILL EFFICIEINTLY TRIANGULATE ANY
+// ** POLYGON/CONTOUR (without holes) AS A STATIC CLASS.  
+// ** SUBMITTED BY JOHN W. RATCLIFF (jratcliff@verant.com) July 22, 2000
+
+/*****************************************************************/
+/** Static class to triangulate any contour/polygon efficiently **/
+/** You should replace Vector2d with whatever your own Vector   **/
+/** class might be.  Does not support polygons with holes.      **/
+/** Uses STL vectors to represent a dynamic array of vertices.  **/
+/** This code snippet was submitted to FlipCode.com by          **/
+/** John W. Ratcliff (jratcliff@verant.com) on July 22, 2000    **/
+/** I did not write the original code/algorithm for this        **/
+/** this triangulator, in fact, I can't even remember where I   **/
+/** found it in the first place.  However, I did rework it into **/
+/** the following black-box static class so you can make easy   **/
+/** use of it in your own code.  Simply replace Vector2d with   **/
+/** whatever your own Vector implementation might be.           **/
+/*****************************************************************/
+
+var EPSILON=parseFloat(0.0000000001)
+
+function Area( contour)
+{
+  n = contour.length
+
+  var A=parseFloat(0.0)
+  var p, q
+  for(p=n-1,q=0; q<n; p=q++)
+  {
+    A+= parseFloat(contour[p].x*contour[q].y - contour[q].x*contour[p].y)
+  }
+  return parseFloat(A*0.5)
+}
+
+   /*
+     InsideTriangle decides if a point P is Inside of the triangle
+     defined by A, B, C.
+   */
+function InsideTriangle(Ax, Ay, Bx, By,Cx, Cy, Px, Py)
+
+{
+  var ax, ay, bx, by, cx, cy, apx, apy, bpx, bpy, cpx, cpy
+  var cCROSSap, bCROSScp, aCROSSbp
+
+  ax = parseFloat(Cx - Bx )
+  ay = parseFloat(Cy - By)
+  bx = parseFloat(Ax - Cx ) 
+  by = parseFloat(Ay - Cy)
+  cx = parseFloat(Bx - Ax ) 
+  cy = parseFloat(By - Ay)
+  apx= parseFloat(Px - Ax ) 
+  apy= parseFloat(Py - Ay)
+  bpx= parseFloat(Px - Bx ) 
+  bpy= parseFloat(Py - By)
+  cpx= parseFloat(Px - Cx ) 
+  cpy= parseFloat(Py - Cy)
+
+  aCROSSbp = parseFloat(ax*bpy - ay*bpx)
+  cCROSSap = parseFloat(cx*apy - cy*apx)
+  bCROSScp = parseFloat(bx*cpy - by*cpx)
+
+  if ((aCROSSbp >= 0.0) && (bCROSScp >= 0.0) && (cCROSSap >= 0.0))
+    return true
+  else 
+    return false
+}
+
+function Snip(contour, u, v, w, n, V)
+{
+  var p
+  var Ax, Ay, Bx, By, Cx, Cy, Px, Py
+
+  Ax = contour[V[u]].x
+  Ay = contour[V[u]].y
+
+  Bx = contour[V[v]].x
+  By = contour[V[v]].y
+
+  Cx = contour[V[w]].x
+  Cy = contour[V[w]].y
+
+  if ( EPSILON > (((Bx-Ax)*(Cy-Ay)) - ((By-Ay)*(Cx-Ax))) )
+   return false
+
+  for (p=0; p<n; p++)
+  {
+    if( (p == u) || (p == v) || (p == w) )
+	  continue
+    Px = contour[V[p]].x
+    Py = contour[V[p]].y
+    if (InsideTriangle(Ax,Ay,Bx,By,Cx,Cy,Px,Py)) 
+	  return false
+  }
+  return true
+}
+
+function Process( contour, result)
+{
+  /* allocate and initialize list of Vertices in polygon */
+
+  var n = contour.length
+  if ( n < 3 ) 
+    return false
+
+  var V = []
+
+  /* we want a counter-clockwise polygon in V */
+
+  if ( 0.0 < Area(contour) ){
+    for ( v=0; v<n; v++) 
+	   V[v] = v
+  }else{
+    for(v=0; v<n; v++) 
+	   V[v] = (n-1)-v
+  }
+  var nv = n
+
+  /*  remove nv-2 Vertices, creating 1 triangle every time */
+ var count = 2*nv   /* error detection */
+
+  for(m=0, v=nv-1; nv>2; )
+  {
+    /* if we loop, it is probably a non-simple polygon */
+    if (0 >= (count--))
+    {
+      //** Triangulate: ERROR - probable bad polygon!
+	  alert ("BAD POLYGON")
+      return false
+    }
+
+    /* three consecutive vertices in current polygon, <u,v,w> */
+    var u = v   
+	if (nv <= u) 
+	   u = 0     /* previous */
+    v = u+1 
+	
+	if (nv <= v) 
+	   v = 0     /* new v    */
+    var w = v+1 
+	if (nv <= w) 
+	   w = 0     /* next     */
+
+    if ( Snip(contour,u,v,w,nv,V) )
+    {
+      var a,b,c,s,t
+
+      /* true names of the vertices */
+      a = V[u] 
+	  b = V[v] 
+	  c = V[w]
+
+      /* output Triangle */
+      result[result.length] = contour[a]
+      result[result.length]= contour[b] 
+      result[result.length]= contour[c] 
+
+      m++
+
+      /* remove v from remaining polygon */
+      for(s=v,t=v+1; t<nv; s++,t++) 
+	    V[s] = V[t] 
+	  nv--
+
+      /* resest error detection counter */
+      count = 2*nv
+    }
+  }
+  return true
+}
+
+//END of Deb's code
+function newfill(Q){
+	if (Q.charAt(0)=="r") var s=Q
+	else var s="url(#"+Q+")"
+	C.setAttribute("fill", s)
+}
+function pattern(){
+	newfill('OvalPattern')
+}
+std=0
+function blurIt(){
+	
+std=(std+4)
+if (std>20) std=.00001
+
+	AB.setAttribute("stdDeviation", std)
+	
+	
+	//C.setAttribute("filter", "url(#A)")
+}
+function turb(){
+	C.setAttribute('fill', 'url(#D)')
+}
+function gradient(type){
+	var G=document.getElementById(type)
+	var stops=G.childNodes
+	var randdeg=Math.random()*180
+	if (G.nodeName=="pattern") {
+		var hsize=Math.random()*40+5
+		G.setAttribute("width",hsize)
+		var vsize=Math.random()*100+5
+		G.setAttribute("height",vsize)
+		
+		G.setAttribute("patternTransform","rotate("+randdeg+")")
+	}
+	if (G.nodeName.indexOf("Gradient")>-1) {
+		G.setAttribute("gradientTransform","rotate("+randdeg+" .5 .5)")
+	}
+	
+
+	for (i=0;i<stops.length;i++){
+		
+		var s=stops.item(i)
+		if (s.nodeName=="#text") continue
+		if (s.nodeName=="stop"){
+			s.setAttributeNS(null,"stop-color", color())
+			if (Math.random()<.25) s.setAttributeNS(null,"stop-opacity", Math.random()/2)
+			else s.setAttributeNS(null,"stop-opacity", 1)
+		}
+		if (stops.item(i).nodeName=="ellipse"){
+			s.setAttributeNS(null,"fill", color())
+			s.setAttributeNS(null,"cx", Math.random()*(hsize))
+			s.setAttributeNS(null,"cy", Math.random()*(vsize))
+			s.setAttributeNS(null,"ry", Math.random()*(vsize-4)+4)
+			s.setAttributeNS(null,"rx", Math.random()*(hsize-4)/2+4)
+			s.setAttributeNS(null,"filter", "url(#A)")
+			
+			
+		}
+		if (stops.item(i).nodeName=="rect"){
+			s.setAttributeNS(null,"width", hsize)
+			s.setAttributeNS(null,"height", vsize)
+			s.setAttributeNS(null,"fill", color())
+			s.setAttributeNS(null, "filter", "url(#A)")
+		}
+	}	
+	newfill(type)
+}
+function color(){
+	return "rgb("+parseInt(Math.random()*255)+","+parseInt(Math.random()*255)+","+parseInt(Math.random()*255)+")";
+}
+function predrag(evt){
+	ox=evt.clientX
+	oy=evt.clientY
+	O=evt.target
+	document.documentElement.setAttributeNS(null,"onmousemove","drag(evt)")
+}
+function drag(evt){
+	//var O=evt.target
+	var x=evt.clientX
+	var y=evt.clientY
+	dx=x-ox
+	dy=y-oy
+	O.setAttributeNS(null, "transform", "translate("+dx+", "+dy+" )")
+}
+function stopdrag(evt){
+	document.documentElement.setAttribute('onmousemove',null)
+	for (i in P){
+		P[i].x+=dx
+		P[i].y+=dy
+	}
+	path="M "
+	
+		for (var i=0;i<P.length;i++){
+			path+=P[i].x+" "+P[i].y+" "
+		}
+		
+	path+="z"
+	O.setAttributeNS(null, "d", path)
+	if (globalsmooth) smooth()
+	O.setAttributeNS(null, "transform", "translate("+0+", "+0+" )")
+}
+function animateG(deg){
+	if (!running) return
+	var G=document.getElementById('gl')
+	//var stops=G.childNodes
+	//var randdeg=Math.random()*180
+	newdeg=deg+.5
+	//var randdeg=Math.random()*180
+	G.setAttribute("gradientTransform","rotate("+newdeg+" .5 .5)")
+	setTimeout("animateG(newdeg)",30)
+	//return newdeg
+}
+
+function animateS(){//<animate  dur="15s" values=".01;.02;0;.01"  repeatCount="indefinite"/>
+	if (!Srunning) return
+	var G=document.getElementById('gl')
+	var stops=G.getElementsByTagName('stop')
+	if (!stops.item(0).firstChild){
+	for (var i=0;i<stops.length;i++){
+		var A=document.createElementNS(xmlns, "animate")
+		A.setAttribute("attributeName","stop-opacity")
+		A.setAttribute("dur",Math.random()*7+2)
+		A.setAttribute("values",".4;1;.4")
+		A.setAttribute("repeatCount","indefinite")
+		stops.item(i).appendChild(A)
+	
+	}
+	}
+	//setTimeout("animateG(newdeg)",10)
+	//return newdeg
+}
+]]>
+</script>
+<defs>
+<linearGradient id="gl" gradientTransform="rotate(30 .5 .5)">
+<stop offset=".0" stop-color="black"/>
+<stop offset=".1" stop-color="white"/>
+<stop offset=".4" stop-color="black"/>
+<stop offset=".7" stop-color="white"/>
+<stop offset=".9" stop-color="black"/>
+</linearGradient>
+
+<radialGradient id="gr" cx="50%" cy="50%" r="10%" fx="30%" fy="25%" spreadMethod="reflect" >
+	<stop  offset="0" stop-color="black" />
+	<stop  offset=".3" stop-color="black" />
+
+	<stop  offset="0.6" stop-color="white" stop-opacity=".5"/>
+	<stop  offset="0.8" stop-color="white" stop-opacity=".5"/>
+
+<animate attributeName="fx" dur="12s" values=".5;.65;.15;.5"  repeatCount="indefinite"/>
+<animate attributeName="fy" dur="7s" values=".6;.05;.6"  repeatCount="indefinite"/>
+
+<animate attributeName="r" dur="15s" values=".01;.02;0;.01"  repeatCount="indefinite"/>
+
+ </radialGradient>
+
+<pattern id="OvalPattern" patternUnits="userSpaceOnUse" width="25" height="20" patternTransform="rotate(45)">
+	<rect x="0" y="0" width="25" height="20" fill="url(#rg)" opacity=".5"/>
+	<ellipse cx="20"  cy="8" rx="4" ry="3" fill="#935"/>
+
+	<ellipse  cx="5"  cy="5" rx="4" ry="2" fill="#a7a"/>
+	<ellipse  cx="8" cy="15" rx="3" ry="4" fill="#b80"/>
+	<ellipse  cx="8" cy="15" rx="3" ry="4" fill="#b80" opacity=".5" />
+</pattern>
+<pattern id="D" patternUnits="userSpaceOnUse" width="100%" height="100%" >
+	<rect x="0" y="0" width="100%" height="100%" fill="red" filter="url(#B)"/>
+</pattern>
+<filter id="A">
+	<feGaussianBlur stdDeviation=".01,.01"  id="Ablur"/>
+</filter>
+<filter id="B" patternUnits="userSpaceOnUse">
+	<feTurbulence baseFrequency=".01" numOctaves="4" seed="200"/>
+
+</filter>
+<circle id="V" r="5" stroke-width="1" stroke="black" fill="#008" />
+</defs>
+<rect width="100%" height="100%" fill="white" id="s" onclick="verbose=true; NP={x:evt.clientX,y:evt.clientY}; chooseHappyLine()"/>
+<g id="keep">
+
+</g>
+
+<path id="PC"  fill="#888" stroke="none" onmousedown="predrag(evt)" onmouseup="stopdrag(evt)"
+stroke-width="1" onclick="verbose=true; NP={x:evt.clientX,y:evt.clientY}; chooseHappyLine()" />
+<path id="line" stroke-width="3" stroke="#f60" opacity="1"/>
+<g id="temp">
+
+</g>
+
+<g id="menu" transform="translate(20,-75)">
+<g onclick="keepIt()" 
+transform="translate(0,-150)" fill="#8f8">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%" fill="black" >keep</text>
+</g>
+
+<g onclick="verbose=false; redo(15)" 
+transform="translate(0,-125)" fill="#aaa">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%" fill="black" >15 fresh</text>
+</g>
+
+<g onclick="verbose=false; redo(15)" 
+transform="translate(0,-125)" fill="#aaa">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%" fill="black" >15 fresh</text>
+</g>
+
+<g onclick="verbose=false; several(5)" 
+transform="translate(0,-100)" fill="#f88">
+
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%" fill="black" >5 more</text>
+</g>
+
+<g onclick="verbose=true; refresh(C,0)" 
+transform="translate(0,-75)" fill="#88f">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >fresh 3</text>
+</g>
+
+<g onclick="globalsmooth=!globalsmooth;smooth()" 
+transform="translate(0,-50)" fill="#ff8">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >smooth</text>
+</g>
+
+<g onclick="verbose=true; several(1)" 
+transform="translate(0,-25)" fill="#8f8">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >random point</text>
+</g>
+ 
+<g onclick="gradient('gl');" 
+transform="translate(0,0)" fill="#88f">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >Lin gradient</text>
+</g>
+ 
+<g onclick="gradient('gr');" 
+transform="translate(0,25)" fill="#ff8">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >Rad gradient</text>
+</g>
+
+<g onclick="gradient('OvalPattern');" 
+transform="translate(0,50)" fill="#fff">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >Pattern</text>
+</g>
+
+<g onclick="newfill(color())" 
+transform="translate(0,75)" fill="#f88">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >color</text>
+</g>
+
+<g onclick="turb()" 
+transform="translate(0,100)" fill="#aaa">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >filter</text>
+
+</g>
+
+<g onclick="blurIt()" 
+transform="translate(0,125)" fill="#f8f">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >Pattern blur</text>
+</g> 
+
+<g onclick="try {running=!running} catch(err){running=true};animateG(0) " 
+transform="translate(0,150)" fill="#8ff">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >anim gr angle</text>
+</g> 
+
+<g onclick="try {Srunning=!Srunning} catch(err){Srunning=true};animateS() " 
+transform="translate(0,175)" fill="#f88">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="78%"  fill="black" >SMIL gr opacity</text>
+</g> 
+ <g onclick="auto()" 
+transform="translate(0,75)" fill="#888">
+<rect x="85%" y="75%" height="20" width="12%" fill="inherit" stroke="black" stroke-width="2"/>
+<text font-size="12"  x="86%" y="77%"  fill="black" >automate</text>
+</g>
+</g>
+</svg>

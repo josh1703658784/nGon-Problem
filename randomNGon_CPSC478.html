@@ -22,27 +22,55 @@ var globalAnimationCancel
 
 var bruteForceTotalChecks = 0
 var quadTreeTotalChecks = 0
-    
+
+
+//testing performance stuff
+var isTestingEnabled = true
+var animateSolution = true
+var useQuadTree = false
+var solutionType = "Canvas"
+//var testNs = [10,100,1000,10000, 100000]
+var testNs = [100]
+var startTime
+var endTime
+
     
 
 
     function init(){
-        quadTree = new QuadTree({x:0,y:0,width:1000,height:1000});
-        createTriangle()
-        addN()
-        printStats()
-		//drawLines()
+        if(!isTestingEnabled){
+            if(useQuadTree){ quadTree = new QuadTree({x:0,y:0,width:1000,height:1000}); }
+            var startTime = (Date.now())
+            createTriangle()
+            addN()
+    //        printStats()
+            var endTime = (Date.now())
+        }
+        else{
+            for(var i = 0; i < testNs.length; i++){
+                n = testNs[i]
+                if(useQuadTree){ quadTree = new QuadTree({x:0,y:0,width:1000,height:1000}); }
+                
+                startTime = (Date.now())
+                lines = []
+                createTriangle()
+                addN()
+                var endTime = (Date.now())
+
+                
+                console.log(solutionType + "," + useQuadTree + "," + n + "," + (endTime - startTime))
+            }
+            
+            
+        }
     }
     
  
     
     function addN(){
-        
-        if(nCounter < n){
             globalAnimationCancel = window.requestAnimationFrame(addN);
+            //MUST USE THIS INSTEAD OF FOR LOOP TO GET GPU ACCELERATION
         
-        
-//        for(i = 0; i < n; i++){
             var isValid = false
             while(!isValid){
                 var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
@@ -67,26 +95,25 @@ var quadTreeTotalChecks = 0
                 lines.push(lineOne)
                 lines.push(lineTwo)
 
-                addLinesToQuadTree()
+                if(useQuadTree){ addLinesToQuadTree() }
                 if(detectCollision(lineOne, lineTwo)){
-					drawLines()
+					if(animateSolution){ drawLines() }
                     lines.pop()
                     lines.pop()
                     lines.push(removedLine)
                     isValid = false
-					drawLines()
+                    if(animateSolution){ drawLines() }
                 }
                 else{
-				drawLines()
+                    if(animateSolution){ drawLines() }
                     isValid = true
-                    nCounter += 2
+                    nCounter += 1
                 }
             }
-//        }
-        
-        }
-        else{
+        if(nCounter > n){
             window.cancelAnimationFrame(globalAnimationCancel)
+            console.log("RANDOM N FOUND")
+            drawLines()
         }
     }
 
@@ -105,7 +132,7 @@ var quadTreeTotalChecks = 0
         lines[2].yEnd = lines[1].yEnd
 		nCounter += 3
         
-        drawLines()
+        if(animateSolution){ drawLines() }
         addLinesToQuadTree()
     }
 
@@ -119,14 +146,16 @@ var quadTreeTotalChecks = 0
             
         }
         ctx.strokeStyle = "black"
-            ctx.stroke();
+        ctx.stroke();
         ctx.closePath()
     }
     
     function addLinesToQuadTree(){
-        quadTree.clear()
-        for(var i = 0; i < lines.length; i++){
-            quadTree.insert(lines[i])
+        if(useQuadTree){ 
+            quadTree.clear()
+            for(var i = 0; i < lines.length; i++){
+                quadTree.insert(lines[i])
+            }
         }
     }
 
@@ -201,9 +230,8 @@ function getRandomColor() {
 
 
 function detectCollision(lineOne, lineTwo) {
-var status = false
 
-if(status){
+if(!useQuadTree){
 	for(var i = 0; i < lines.length; i++){
 		var lineOne = lines[i]
 		for(var j = 0; j < lines.length; j++){
@@ -215,8 +243,7 @@ if(status){
 	}
 	return false
 }
-
-
+else{
     var objects = [];
     var isCollision = true
     var numberCheckedOne
@@ -233,13 +260,14 @@ if(status){
 						//quadTreeTotalChecks = quadTreeTotalChecks + numberCheckedOne + numberCheckedTwo
 				// DETECT COLLISION ALGORITHM
 				   if(findIntersection(objects[x], obj[y])){
-
 					   return true
 				   }
 			}
 		//}
 
     }
+    return false
+}
 
 }
 
@@ -302,19 +330,19 @@ if(status){
 
         if(result.onLine1 && result.onLine2){
     //                    var xIntersection = calculateXIntersection(theLine, lines[j])
-            ctx.beginPath()
-            ctx.moveTo(result.x, 0);
-            ctx.lineTo(result.x, 1000);
-            ctx.closePath()
-            ctx.strokeStyle = "black"
-            ctx.stroke();
-
-            ctx.beginPath()
-            ctx.moveTo(0, result.y);
-            ctx.lineTo(1000, result.y);
-            ctx.closePath()
-            ctx.strokeStyle = "black"
-            ctx.stroke();
+//            ctx.beginPath()
+//            ctx.moveTo(result.x, 0);
+//            ctx.lineTo(result.x, 1000);
+//            ctx.closePath()
+//            ctx.strokeStyle = "black"
+//            ctx.stroke();
+//
+//            ctx.beginPath()
+//            ctx.moveTo(0, result.y);
+//            ctx.lineTo(1000, result.y);
+//            ctx.closePath()
+//            ctx.strokeStyle = "black"
+//            ctx.stroke();
             return true
         }
         
