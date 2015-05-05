@@ -27,8 +27,11 @@ var quadTreeTotalChecks = 0
 //testing performance stuff
 var isTestingEnabled = true
 var animateSolution = true
-var useQuadTree = false
+var isLogEnabled = false
+var useQuadTree = true
 var solutionType = "Canvas"
+var limitLineLength = false     //not fully functional
+var maxLineLength = 100
 //var testNs = [10,100,1000,10000, 100000]
 var testNs = [100]
 var startTime
@@ -59,10 +62,16 @@ var endTime
 
                 
                 console.log(solutionType + "," + useQuadTree + "," + n + "," + (endTime - startTime))
+                
             }
-            
-            
         }
+    }
+    
+    
+    function qualityCollisionCheck(){
+        useQuadTree = false
+        animateSolution = true
+        detectCollision()
     }
     
  
@@ -75,12 +84,21 @@ var endTime
             while(!isValid){
                 var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
 
-                var randomX = Math.floor((Math.random() * width) + 1)
-                var randomY = Math.floor((Math.random() * height) + 1)
-
                 var xOne = lines[removeMeIndex].xStart
                 var yOne = lines[removeMeIndex].yStart
 
+                var randomX
+                var randomY
+                if(!limitLineLength){
+                    randomX = Math.floor((Math.random() * width) + 1)
+                    randomY = Math.floor((Math.random() * height) + 1)
+                }
+                else{
+                    randomX = xOne + Math.floor((Math.random() * maxLineLength) + 1)
+                    randomX = yOne + Math.floor((Math.random() * maxLineLength) + 1)
+                }
+                
+                
                 var xTwo = randomX
                 var yTwo = randomY
 
@@ -96,7 +114,7 @@ var endTime
                 lines.push(lineTwo)
 
                 if(useQuadTree){ addLinesToQuadTree() }
-                if(detectCollision(lineOne, lineTwo)){
+                if(detectCollision()){
 					if(animateSolution){ drawLines() }
                     lines.pop()
                     lines.pop()
@@ -108,12 +126,14 @@ var endTime
                     if(animateSolution){ drawLines() }
                     isValid = true
                     nCounter += 1
+                    if(isLogEnabled){ console.log(nCounter) }
                 }
             }
         if(nCounter > n){
             window.cancelAnimationFrame(globalAnimationCancel)
             console.log("RANDOM N FOUND")
             drawLines()
+            qualityCollisionCheck()
         }
     }
 
@@ -139,14 +159,18 @@ var endTime
     function drawLines(){
         ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
          ctx.beginPath()
+//         ctx.fillStyle = 'black';
+      
         for(var i = 0; i < lines.length; i++){
            
             ctx.moveTo(lines[i].xStart, lines[i].yStart);
             ctx.lineTo(lines[i].xEnd, lines[i].yEnd);
             
         }
+        
         ctx.strokeStyle = "black"
         ctx.stroke();
+//        ctx.fill();
         ctx.closePath()
     }
     
@@ -229,7 +253,7 @@ function getRandomColor() {
 }
 
 
-function detectCollision(lineOne, lineTwo) {
+function detectCollision() {
 
 if(!useQuadTree){
 	for(var i = 0; i < lines.length; i++){
@@ -329,20 +353,22 @@ else{
 //                    console.log(result.onLine1 && result.onLine2)
 
         if(result.onLine1 && result.onLine2){
-    //                    var xIntersection = calculateXIntersection(theLine, lines[j])
-//            ctx.beginPath()
-//            ctx.moveTo(result.x, 0);
-//            ctx.lineTo(result.x, 1000);
-//            ctx.closePath()
-//            ctx.strokeStyle = "black"
-//            ctx.stroke();
-//
-//            ctx.beginPath()
-//            ctx.moveTo(0, result.y);
-//            ctx.lineTo(1000, result.y);
-//            ctx.closePath()
-//            ctx.strokeStyle = "black"
-//            ctx.stroke();
+//                        var xIntersection = calculateXIntersection(theLine, lines[j])
+            if(animateSolution){
+                ctx.beginPath()
+                ctx.moveTo(result.x, 0);
+                ctx.lineTo(result.x, 1000);
+                ctx.closePath()
+                ctx.strokeStyle = "red"
+                ctx.stroke();
+
+                ctx.beginPath()
+                ctx.moveTo(0, result.y);
+                ctx.lineTo(1000, result.y);
+                ctx.closePath()
+                ctx.strokeStyle = "red"
+                ctx.stroke();
+            }
             return true
         }
         

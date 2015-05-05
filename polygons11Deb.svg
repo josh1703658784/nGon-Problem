@@ -16,7 +16,7 @@ var border=[]
 //dailey's
 function startup(evt)
 {
-    var myN = 100
+    var myN = 1000
     var solutionType = "SVG"
     var startTime = (Date.now())
 	var Screen=document.getElementById("s")
