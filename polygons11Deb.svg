@@ -16,7 +16,7 @@ var border=[]
 //dailey's
 function startup(evt)
 {
-    var myN = 1000
+    var myN = 500
     var solutionType = "SVG"
     var startTime = (Date.now())
 	var Screen=document.getElementById("s")
@@ -29,7 +29,7 @@ function startup(evt)
 	refresh(C, myN)
 	AB=document.getElementById("Ablur")
     var endTime = (Date.now())
-    console.log(solutionType + "," + "false" + "," + myN + "," + (endTime - startTime))
+    console.log((endTime - startTime) + "ms")
     
 }
 function keepIt(){

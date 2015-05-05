@@ -1,22 +1,54 @@
+<!--CREATED BY JOSHUA SARVER-->
+<!--CPSC 478 - SPRING 2015-->
+<!--DRAWS AN N SIDED POLYGON-->
+<!---->
+
+
 <html>
 <head><title>ngon Creation</title></head>
     
     <body onload="init()">
+<!--
 <canvas id="myCanvas" width="1000" height="1000" style="border:1px solid #000000;">
 </canvas>
+-->
 </body>
 
 <script>
 var lines = []
 
+var boundingBoxHeight
+var boundingBoxWidth
+if(window.innerWidth < window.innerHeight){
+    boundingBoxWidth = window.innerWidth * 0.9
+    boundingBoxHeight = window.innerWidth * 0.9
+}
+else{
+    boundingBoxWidth = window.innerHeight * 0.9
+    boundingBoxHeight = window.innerHeight * 0.9
+}
+
+var boundBoxX = 0
+var boundBoxY = 0
+
+var canvas = document.createElement('canvas');
+canvas.id     = "myCanvas";
+canvas.width  = boundingBoxWidth;
+canvas.height = boundingBoxHeight;
+canvas.style.zIndex   = 8;
+canvas.style.position = "absolute";
+canvas.style.left = boundBoxX + "px";
+canvas.style.top = boundBoxY + "px";
+
+document.body.appendChild(canvas);
+
 var canvas = document.getElementById('myCanvas')
 var ctx = canvas.getContext('2d');
 
-var width = 700
-var height = 700
+var width = boundingBoxWidth
+var height = boundingBoxWidth
 var quadTree
 var n = 100
-var MAX_LENGTH = width / 10
 var nCounter = 0
 var globalAnimationCancel
 
@@ -25,222 +57,399 @@ var quadTreeTotalChecks = 0
 
 
 //testing performance stuff
-var isTestingEnabled = true
+//var isTestingEnabled = true
 var animateSolution = true
-var isLogEnabled = false
+var isLogEnabled = true 
 var useQuadTree = true
 var solutionType = "Canvas"
-var limitLineLength = false     //not fully functional
+var limitLineLength = false     
 var maxLineLength = 100
-//var testNs = [10,100,1000,10000, 100000]
-var testNs = [100]
-var startTime
-var endTime
+var maxLevels = 100
+var testNs = [1000]
+var startTime = 0
+var endTime = 0
+var numberBruteForceChecks = 0
+var numberQuadTreeChecks = 0
 
     
+startTime = (Date.now())
 
+function init(){
+    for(var i = 0; i < testNs.length; i++){
+        n = testNs[i]
+        if(useQuadTree){ quadTree = new QuadTree({x:boundBoxX,y:boundBoxY,width:boundingBoxWidth,height:boundingBoxHeight}, maxLevels); }
 
-    function init(){
-        if(!isTestingEnabled){
-            if(useQuadTree){ quadTree = new QuadTree({x:0,y:0,width:1000,height:1000}); }
-            var startTime = (Date.now())
-            createTriangle()
-            addN()
-    //        printStats()
-            var endTime = (Date.now())
+        lines = []
+        createTriangle()
+        addN()
+    }
+}
+
+    
+function qualityCollisionCheck(){
+    //DRAWS A RED CROSS OVER ANY FOUND INTERSECTIONS
+    for(var i = 0; i < lines.length; i++){
+        var lineOne = lines[i]
+        for(var j = 0; j < lines.length; j++){
+            var lineTwo = lines[j]
+            findIntersection(lineOne, lineTwo)
+        }
+    }
+}
+    
+
+    
+function addNWithAnimation(){
+    globalAnimationCancel = window.requestAnimationFrame(addN);
+
+    var isValid = false
+    while(!isValid){
+        var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
+
+        var xOne = lines[removeMeIndex].xStart
+        var yOne = lines[removeMeIndex].yStart
+
+        var randomX
+        var randomY
+        if(!limitLineLength){
+            randomX = Math.floor((Math.random() * width) + 1)
+            randomY = Math.floor((Math.random() * height) + 1)
         }
         else{
-            for(var i = 0; i < testNs.length; i++){
-                n = testNs[i]
-                if(useQuadTree){ quadTree = new QuadTree({x:0,y:0,width:1000,height:1000}); }
-                
-                startTime = (Date.now())
-                lines = []
-                createTriangle()
-                addN()
-                var endTime = (Date.now())
+            randomX = addOrSubtract(xOne, Math.floor((Math.random() * maxLineLength) + 1))
+            randomY = addOrSubtract(yOne, Math.floor((Math.random() * maxLineLength) + 1))
+        }
 
-                
-                console.log(solutionType + "," + useQuadTree + "," + n + "," + (endTime - startTime))
-                
+
+
+
+        var xTwo = randomX
+        var yTwo = randomY
+
+        var xThree = lines[removeMeIndex].xEnd
+        var yThree = lines[removeMeIndex].yEnd
+
+        var removedLine = lines[removeMeIndex]
+        lines.splice(removeMeIndex, 1)
+
+        var lineOne = new Line(xOne, yOne, xTwo, yTwo)
+        var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
+        lines.push(lineOne)
+        lines.push(lineTwo)
+
+        if(useQuadTree){ addLinesToQuadTree() }
+        if(detectCollision(lineOne, lineTwo)){
+            if(animateSolution){ drawLines() }
+            lines.pop()
+            lines.pop()
+            lines.push(removedLine)
+            isValid = false
+            if(animateSolution){ drawLines() }
+        }
+        else{
+            if(animateSolution){ drawLines() }
+            isValid = true
+            nCounter += 1
+            if(isLogEnabled){ console.log(nCounter) }
+        }
+    }
+    if(nCounter > n){
+        window.cancelAnimationFrame(globalAnimationCancel)
+
+        if(useQuadTree) { 
+            console.log("Random n found")
+
+            var savings = (numberBruteForceChecks - numberQuadTreeChecks) / numberBruteForceChecks * 100
+
+            console.log("Bruteforce Checks: " + numberBruteForceChecks + "\n" + 
+                        "Quadtree Checks: " + numberQuadTreeChecks + "\n" + 
+                        "Savings: " + Math.floor(savings) + "%"
+                       )
+
+            endTime = Date.now()
+        }
+        drawLines()
+        qualityCollisionCheck()
+    }
+}
+
+    
+    
+function addN(isAnimated){
+    if(animateSolution){ addNWithAnimation() }
+    else { addNWithoutAnimation() }
+}
+    
+function addNWithoutAnimation(){
+    while(nCounter < n){
+        var isValid = false
+        while(!isValid){
+            var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
+
+            var xOne = lines[removeMeIndex].xStart
+            var yOne = lines[removeMeIndex].yStart
+
+            var randomX
+            var randomY
+            if(!limitLineLength){
+                randomX = Math.floor((Math.random() * width) + 1)
+                randomY = Math.floor((Math.random() * height) + 1)
+            }
+            else{
+                randomX = addOrSubtract(xOne, Math.floor((Math.random() * maxLineLength) + 1))
+                randomY = addOrSubtract(yOne, Math.floor((Math.random() * maxLineLength) + 1))
+            }
+
+            var xTwo = randomX
+            var yTwo = randomY
+
+            var xThree = lines[removeMeIndex].xEnd
+            var yThree = lines[removeMeIndex].yEnd
+
+            var removedLine = lines[removeMeIndex]
+
+
+            var lineOne = new Line(xOne, yOne, xTwo, yTwo)
+            var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
+            lines.splice(removeMeIndex, 1, lineOne, lineTwo)
+    //        lines.push(lineOne)
+    //        lines.push(lineTwo)
+
+            if(useQuadTree){ addLinesToQuadTree() }
+            if(detectCollision(lineOne, lineTwo)){
+                if(animateSolution){ drawLines() }
+                lines.splice(removeMeIndex, 2, removedLine)
+    //            lines.pop()
+    //            lines.pop()
+    //            lines.push(removedLine)
+                isValid = false
+                if(animateSolution){ drawLines() }
+            }
+            else{
+                if(animateSolution){ drawLines() }
+                isValid = true
+                nCounter += 1
+                if(isLogEnabled){ console.log(nCounter) }
             }
         }
     }
-    
-    
-    function qualityCollisionCheck(){
-        useQuadTree = false
-        animateSolution = true
-        detectCollision()
+
+    if(true) { 
+        console.log("Random n found")
+
+        var savings = (numberBruteForceChecks - numberQuadTreeChecks) / numberBruteForceChecks * 100
+
+        console.log("Bruteforce Checks: " + numberBruteForceChecks + "\n" + 
+                    "Quadtree Checks: " + numberQuadTreeChecks + "\n" + 
+                    "Savings: " + Math.floor(savings) + "%" + "\n" +
+                    "Runtime: " + (Date.now() - startTime) + "ms"
+                   )
+
+//        endTime = Date.now()
+//        console.lo
+//            console.log(solutionType + "," + useQuadTree + "," + n + "," + ((endTime - startTime)))
+
     }
+    drawLines()
+    qualityCollisionCheck()
+}
     
- 
-    
-    function addN(){
-            globalAnimationCancel = window.requestAnimationFrame(addN);
-            //MUST USE THIS INSTEAD OF FOR LOOP TO GET GPU ACCELERATION
+function addNWithAnimation(){
+    globalAnimationCancel = window.requestAnimationFrame(addN);
+
+    var isValid = false
+    while(!isValid){
+        var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
+
+        var xOne = lines[removeMeIndex].xStart
+        var yOne = lines[removeMeIndex].yStart
+
+        var randomX
+        var randomY
+        if(!limitLineLength){
+            randomX = Math.floor((Math.random() * width) + 1)
+            randomY = Math.floor((Math.random() * height) + 1)
+        }
+        else{
+            randomX = addOrSubtract(xOne, Math.floor((Math.random() * maxLineLength) + 1))
+            randomY = addOrSubtract(yOne, Math.floor((Math.random() * maxLineLength) + 1))
+        }
+
+        var xTwo = randomX
+        var yTwo = randomY
+
+        var xThree = lines[removeMeIndex].xEnd
+        var yThree = lines[removeMeIndex].yEnd
+
+        var removedLine = lines[removeMeIndex]
         
-            var isValid = false
-            while(!isValid){
-                var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
 
-                var xOne = lines[removeMeIndex].xStart
-                var yOne = lines[removeMeIndex].yStart
+        var lineOne = new Line(xOne, yOne, xTwo, yTwo)
+        var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
+        lines.splice(removeMeIndex, 1, lineOne, lineTwo)
+//        lines.push(lineOne)
+//        lines.push(lineTwo)
 
-                var randomX
-                var randomY
-                if(!limitLineLength){
-                    randomX = Math.floor((Math.random() * width) + 1)
-                    randomY = Math.floor((Math.random() * height) + 1)
-                }
-                else{
-                    randomX = xOne + Math.floor((Math.random() * maxLineLength) + 1)
-                    randomX = yOne + Math.floor((Math.random() * maxLineLength) + 1)
-                }
-                
-                
-                var xTwo = randomX
-                var yTwo = randomY
-
-                var xThree = lines[removeMeIndex].xEnd
-                var yThree = lines[removeMeIndex].yEnd
-
-                var removedLine = lines[removeMeIndex]
-                lines.splice(removeMeIndex, 1)
-
-				var lineOne = new Line(xOne, yOne, xTwo, yTwo)
-				var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
-                lines.push(lineOne)
-                lines.push(lineTwo)
-
-                if(useQuadTree){ addLinesToQuadTree() }
-                if(detectCollision()){
-					if(animateSolution){ drawLines() }
-                    lines.pop()
-                    lines.pop()
-                    lines.push(removedLine)
-                    isValid = false
-                    if(animateSolution){ drawLines() }
-                }
-                else{
-                    if(animateSolution){ drawLines() }
-                    isValid = true
-                    nCounter += 1
-                    if(isLogEnabled){ console.log(nCounter) }
-                }
-            }
-        if(nCounter > n){
-            window.cancelAnimationFrame(globalAnimationCancel)
-            console.log("RANDOM N FOUND")
-            drawLines()
-            qualityCollisionCheck()
+        if(useQuadTree){ addLinesToQuadTree() }
+        if(detectCollision(lineOne, lineTwo)){
+            if(animateSolution){ drawLines() }
+            lines.splice(removeMeIndex, 2, removedLine)
+//            lines.pop()
+//            lines.pop()
+//            lines.push(removedLine)
+            isValid = false
+            if(animateSolution){ drawLines() }
+        }
+        else{
+            if(animateSolution){ drawLines() }
+            isValid = true
+            nCounter += 1
+            if(isLogEnabled){ console.log(nCounter) }
         }
     }
+    if(nCounter > n){
+        window.cancelAnimationFrame(globalAnimationCancel)
 
-    function createTriangle(){
-        for(var i = 0; i < 3; i++){
-            lines.push(new Line())
+        if(useQuadTree && isLogEnabled) { 
+            console.log("Random n found")
+
+            var savings = (numberBruteForceChecks - numberQuadTreeChecks) / numberBruteForceChecks * 100
+
+            console.log("Bruteforce Checks: " + numberBruteForceChecks + "\n" + 
+                        "Quadtree Checks: " + numberQuadTreeChecks + "\n" + 
+                        "Savings: " + Math.floor(savings) + "%"
+                       )
+
+            endTime = Date.now()
+            console.log(solutionType + "," + useQuadTree + "," + n + "," + ((endTime - startTime)/1000))
+
         }
-        var x = lines[0].xStart
-        var y = lines[0].yStart
-        lines[1].xStart = x
-        lines[1].yStart = y
-        
-        lines[2].xStart = lines[0].xEnd
-        lines[2].yStart = lines[0].yEnd
-        lines[2].xEnd = lines[1].xEnd
-        lines[2].yEnd = lines[1].yEnd
-		nCounter += 3
-        
-        if(animateSolution){ drawLines() }
-        addLinesToQuadTree()
+        drawLines()
+        qualityCollisionCheck()
+    }
+}
+
+function createTriangle(){
+    for(var i = 0; i < 3; i++){
+        lines.push(new Line())
+    }
+    var x = lines[0].xStart
+    var y = lines[0].yStart
+    lines[1].xStart = x
+    lines[1].yStart = y
+
+    lines[2].xStart = lines[0].xEnd
+    lines[2].yStart = lines[0].yEnd
+    lines[2].xEnd = lines[1].xEnd
+    lines[2].yEnd = lines[1].yEnd
+    nCounter += 3
+
+    if(animateSolution){ drawLines() }
+    addLinesToQuadTree()
+}
+
+    
+function addOrSubtract(a, b){
+    if(Math.random() >= 0.5){
+        if(a+b > boundingBoxWidth){
+            return a-b
+        }
+        return a+b
+    }
+    else{
+        if(a-b < boundBoxX){
+            return a+b
+        }
+        return a-b
+    }
+}
+    
+    
+function drawLines(){
+    ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
+    ctx.beginPath()
+    ctx.moveTo(lines[0].xStart, lines[0].yStart);
+    for(var i = 0; i < lines.length; i++){
+        ctx.lineTo(lines[i].xStart, lines[i].yStart);
+        ctx.lineTo(lines[i].xEnd, lines[i].yEnd);
     }
 
-    function drawLines(){
-        ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
-         ctx.beginPath()
-//         ctx.fillStyle = 'black';
-      
+    ctx.strokeStyle = "black"
+//    ctx.stroke();
+    ctx.fillStyle = "grey"
+    ctx.fill()
+    ctx.closePath()
+}
+    
+function addLinesToQuadTree(){
+    if(useQuadTree){ 
+        quadTree.clear()
         for(var i = 0; i < lines.length; i++){
-           
-            ctx.moveTo(lines[i].xStart, lines[i].yStart);
-            ctx.lineTo(lines[i].xEnd, lines[i].yEnd);
-            
+            quadTree.insert(lines[i])
         }
-        
-        ctx.strokeStyle = "black"
-        ctx.stroke();
-//        ctx.fill();
-        ctx.closePath()
     }
+}
     
-    function addLinesToQuadTree(){
-        if(useQuadTree){ 
-            quadTree.clear()
-            for(var i = 0; i < lines.length; i++){
-                quadTree.insert(lines[i])
-            }
-        }
-    }
 
 
-    function Line(xStart, yStart, xEnd, yEnd){
-        if(xStart == null && yStart == null && xEnd == null && yEnd == null){
-            this.xStart = Math.floor((Math.random() * width) + 1)
-            this.yStart = Math.floor((Math.random() * height) + 1)
-            this.xEnd = Math.floor((Math.random() * width) + 1)
-            this.yEnd = Math.floor((Math.random() * height) + 1)
-        }
-        else{
-            this.xStart = xStart
-            this.yStart = yStart
-            this.xEnd = xEnd
-            this.yEnd = yEnd
-        }
-        this.width = 1
-        this.length = calculateLength(this)
-        this.mSlope = calculateSlope(this)
-        this.bYIntercept = calculateB(this)
-        
-		this.x
-		if(this.xStart < this.xEnd){
-			this.x = xStart
-		}
-		else{
-			this.x = this.xEnd
-		}
-        
-		this.y
-		if(this.yStart < this.yEnd){
-			this.y = this.yStart
-		}
-		else{
-			this.y = this.yEnd
-		}
-        this.canvasWidth = Math.abs(this.yEnd - this.yStart)
-        this.canvasHeight = Math.abs(this.xEnd - this.xStart)
-        this.color = getRandomColor()
-        
-        
-        
-        function calculateLength(that){
-            var height = that.xEnd - that.xStart
-            var width = that.yEnd - that.yStart
-            var squared = Math.pow(height, 2) + Math.pow(width, 2)
-            return Math.sqrt(squared)
-        }
-        
-        function calculateSlope(that){
-            var ys = (that.yEnd - that.yStart)
-            var xs = (that.xEnd - that.xStart)
-            return ys / xs
-        }
-        
-        function calculateB(that){
-            return that.yEnd - (that.mSlope * that.xEnd)
-        }
-        
+
+function Line(xStart, yStart, xEnd, yEnd){
+    if(xStart == null && yStart == null && xEnd == null && yEnd == null){
+        this.xStart = Math.floor((Math.random() * boundingBoxWidth) + 1)
+        this.yStart = Math.floor((Math.random() * boundingBoxHeight) + 1)
+        this.xEnd = Math.floor((Math.random() * boundingBoxWidth) + 1)
+        this.yEnd = Math.floor((Math.random() * boundingBoxHeight) + 1)
     }
+    else{
+        this.xStart = xStart
+        this.yStart = yStart
+        this.xEnd = xEnd
+        this.yEnd = yEnd
+    }
+    this.width = 1
+    this.length = calculateLength(this)
+    this.mSlope = calculateSlope(this)
+    this.bYIntercept = calculateB(this)
+
+    this.x
+    if(this.xStart < this.xEnd){
+        this.x = xStart
+    }
+    else{
+        this.x = this.xEnd
+    }
+
+    this.y
+    if(this.yStart < this.yEnd){
+        this.y = this.yStart
+    }
+    else{
+        this.y = this.yEnd
+    }
+    this.canvasWidth = Math.abs(this.yEnd - this.yStart)
+    this.canvasHeight = Math.abs(this.xEnd - this.xStart)
+    this.color = getRandomColor()
+
+
+
+    function calculateLength(that){
+        var height = that.xEnd - that.xStart
+        var width = that.yEnd - that.yStart
+        var squared = Math.pow(height, 2) + Math.pow(width, 2)
+        return Math.sqrt(squared)
+    }
+
+    function calculateSlope(that){
+        var ys = (that.yEnd - that.yStart)
+        var xs = (that.xEnd - that.xStart)
+        return ys / xs
+    }
+
+    function calculateB(that){
+        return that.yEnd - (that.mSlope * that.xEnd)
+    }
+
+}
     
   
 function getRandomColor() {
@@ -253,144 +462,133 @@ function getRandomColor() {
 }
 
 
-function detectCollision() {
-
-if(!useQuadTree){
-	for(var i = 0; i < lines.length; i++){
-		var lineOne = lines[i]
-		for(var j = 0; j < lines.length; j++){
-			var lineTwo = lines[j]
-			if(findIntersection(lineOne, lineTwo)){
-				return true
-			}
-		}
-	}
-	return false
-}
-else{
-    var objects = [];
-    var isCollision = true
-    var numberCheckedOne
-    var numberCheckedTwo
-    
-    quadTree.getAllObjects(objects);
-    for (var x = 0, len = objects.length; x < len; x++) {
-        numberCheckedOne = objects.length
-		//if(objects[x] == lineOne || objects[x] == lineTwo){
-			quadTree.findObjects(obj = [], objects[x]);
-			for (var y = 0, length = obj.length; y < length; y++) {
-				numberCheckedTwo = obj.length
-						//bruteForceTotalChecks = bruteForceTotalChecks + (lines.length * lines.length)
-						//quadTreeTotalChecks = quadTreeTotalChecks + numberCheckedOne + numberCheckedTwo
-				// DETECT COLLISION ALGORITHM
-				   if(findIntersection(objects[x], obj[y])){
-					   return true
-				   }
-			}
-		//}
-
-    }
-    return false
-}
-
-}
-
-
-    function printStats(){
-        console.log("Bruteforce Checks: " + bruteForceTotalChecks)
-        console.log("Quadtree Checks: " + quadTreeTotalChecks)
-		console.log("Improvment: " + (quadTreeTotalChecks / bruteForceTotalChecks))
-}   
-    
-    //https://jsfiddle.net/justin_c_rounds/Gd2S2/
-    function findIntersection(lineOne, lineTwo){
-        
-        var line1StartX = lineOne.xStart
-        var line1EndX = lineOne.xEnd
-        var line1StartY = lineOne.yStart
-        var line1EndY = lineOne.yEnd
-
-        var line2StartX = lineTwo.xStart
-        var line2EndX = lineTwo.xEnd
-        var line2StartY = lineTwo.yStart
-        var line2EndY = lineTwo.yEnd
-
-                
-        var denominator, a, b, numerator1, numerator2, result = {
-            x: null,
-            y: null,
-            onLine1: false,
-            onLine2: false
-        };
-        
-        denominator = ((line2EndY - line2StartY) * (line1EndX - line1StartX)) - ((line2EndX - line2StartX) * (line1EndY - line1StartY));
-        a = line1StartY - line2StartY;
-        b = line1StartX - line2StartX;
-        numerator1 = ((line2EndX - line2StartX) * a) - ((line2EndY - line2StartY) * b);
-        numerator2 = ((line1EndX - line1StartX) * a) - ((line1EndY - line1StartY) * b);
-        a = numerator1 / denominator;
-        b = numerator2 / denominator;
-
-        // if we cast these lines infinitely in both directions, they intersect here:
-        result.x = line1StartX + (a * (line1EndX - line1StartX));
-        result.y = line1StartY + (a * (line1EndY - line1StartY));
-    /*
-            // it is worth noting that this should be the same as:
-            x = line2StartX + (b * (line2EndX - line2StartX));
-            y = line2StartX + (b * (line2EndY - line2StartY));
-            */
-        // if line1 is a segment and line2 is infinite, they intersect if:
-        if (a > 0 && a < 1) {
-            result.onLine1 = true;
-
-        }
-        // if line2 is a segment and line1 is infinite, they intersect if:
-        if (b > 0 && b < 1) {
-            result.onLine2 = true;
-        }
-        // if line1 and line2 are segments, they intersect if both of the above are true
-    //    return result;
-//                    console.log(result.onLine1 && result.onLine2)
-
-        if(result.onLine1 && result.onLine2){
-//                        var xIntersection = calculateXIntersection(theLine, lines[j])
-            if(animateSolution){
-                ctx.beginPath()
-                ctx.moveTo(result.x, 0);
-                ctx.lineTo(result.x, 1000);
-                ctx.closePath()
-                ctx.strokeStyle = "red"
-                ctx.stroke();
-
-                ctx.beginPath()
-                ctx.moveTo(0, result.y);
-                ctx.lineTo(1000, result.y);
-                ctx.closePath()
-                ctx.strokeStyle = "red"
-                ctx.stroke();
+function detectCollision(lineOne, lineTwo) {
+    if(!useQuadTree){
+        for(var i = 0; i < lines.length; i++){
+            var lineOne = lines[i]
+            for(var j = 0; j < lines.length; j++){
+                var lineTwo = lines[j]
+                if(findIntersection(lineOne, lineTwo)){
+                    return true
+                }
             }
-            return true
         }
-        
         return false
     }
-    
-    function calculateXIntersection(lineOne, lineTwo){
-        var bOne = lineOne.bYIntercept
-        var bTwo = lineTwo.bYIntercept
-        var mOne = lineOne.mSlope
-        var mTwo = lineTwo.mSlope
-        console.log(bTwo + "-" + bOne + " / " + mOne + "-" + mTwo)
-        return (bTwo - bOne) / (mOne - mTwo)
+    else{
+        var objects = [];
+        var isCollision = true
+        var numberCheckedOne
+        var numberCheckedTwo
+        var status = false
+        quadTree.getAllObjects(objects);
+        for (var x = 0, len = objects.length; x < len; x++) {
+            if(objects[x] == lineOne || objects[x] == lineTwo){
+                quadTree.findObjects(obj = [], objects[x]);
+                numberQuadTreeChecks += obj.length
+                for (var y = 0, length = obj.length; y < length; y++) {
+                       if(findIntersection(objects[x], obj[y])){
+                           status = true
+                       }
+                }
+            }
+
+        }
+        numberBruteForceChecks += (lines.length * lines.length)
+        return status
     }
+}
+
     
-    function calculateYIntersection(theLine, xIntersect){
-        var m = theLine.mSlope
-        var b = theLine.bYIntercept
-        var x = xIntersect
-        
-        return (m * x) + b
+//https://jsfiddle.net/justin_c_rounds/Gd2S2/
+function findIntersection(lineOne, lineTwo){
+
+    var line1StartX = lineOne.xStart
+    var line1EndX = lineOne.xEnd
+    var line1StartY = lineOne.yStart
+    var line1EndY = lineOne.yEnd
+
+    var line2StartX = lineTwo.xStart
+    var line2EndX = lineTwo.xEnd
+    var line2StartY = lineTwo.yStart
+    var line2EndY = lineTwo.yEnd
+
+
+    var denominator, a, b, numerator1, numerator2, result = {
+        x: null,
+        y: null,
+        onLine1: false,
+        onLine2: false
+    };
+
+    denominator = ((line2EndY - line2StartY) * (line1EndX - line1StartX)) - ((line2EndX - line2StartX) * (line1EndY - line1StartY));
+    a = line1StartY - line2StartY;
+    b = line1StartX - line2StartX;
+    numerator1 = ((line2EndX - line2StartX) * a) - ((line2EndY - line2StartY) * b);
+    numerator2 = ((line1EndX - line1StartX) * a) - ((line1EndY - line1StartY) * b);
+    a = numerator1 / denominator;
+    b = numerator2 / denominator;
+
+    // if we cast these lines infinitely in both directions, they intersect here:
+    result.x = line1StartX + (a * (line1EndX - line1StartX));
+    result.y = line1StartY + (a * (line1EndY - line1StartY));
+/*
+        // it is worth noting that this should be the same as:
+        x = line2StartX + (b * (line2EndX - line2StartX));
+        y = line2StartX + (b * (line2EndY - line2StartY));
+        */
+    // if line1 is a segment and line2 is infinite, they intersect if:
+    if (a > 0 && a < 1) {
+        result.onLine1 = true;
+
     }
+    // if line2 is a segment and line1 is infinite, they intersect if:
+    if (b > 0 && b < 1) {
+        result.onLine2 = true;
+    }
+    // if line1 and line2 are segments, they intersect if both of the above are true
+//    return result;
+//                    console.log(result.onLine1 && result.onLine2)
+
+    if(result.onLine1 && result.onLine2){
+//                        var xIntersection = calculateXIntersection(theLine, lines[j])
+        if(animateSolution){
+            ctx.beginPath()
+            ctx.moveTo(result.x-50, result.y);
+            ctx.lineTo(result.x+50, result.y);
+            ctx.closePath()
+            ctx.strokeStyle = "red"
+            ctx.stroke();
+
+            ctx.beginPath()
+            ctx.moveTo(result.x, result.y-50);
+            ctx.lineTo(result.x, result.y+50);
+            ctx.closePath()
+            ctx.strokeStyle = "red"
+            ctx.stroke();
+        }
+        return true
+    }
+
+    return false
+}
+    
+//function calculateXIntersection(lineOne, lineTwo){
+//    var bOne = lineOne.bYIntercept
+//    var bTwo = lineTwo.bYIntercept
+//    var mOne = lineOne.mSlope
+//    var mTwo = lineTwo.mSlope
+//    console.log(bTwo + "-" + bOne + " / " + mOne + "-" + mTwo)
+//    return (bTwo - bOne) / (mOne - mTwo)
+//}
+//    
+//function calculateYIntersection(theLine, xIntersect){
+//    var m = theLine.mSlope
+//    var b = theLine.bYIntercept
+//    var x = xIntersect
+//
+//    return (m * x) + b
+//}
     
     
     
@@ -419,7 +617,7 @@ function QuadTree(boundBox, lvl) {
 	var objects = [];
 	this.nodes = [];
 	var level = lvl || 0;
-	var maxLevels = 20;
+	var maxLevels = 10;
 	/*
 	 * Clears the quadTree and all nodes of objects
 	 */
