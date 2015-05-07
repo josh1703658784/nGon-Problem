@@ -1,0 +1,447 @@
+<!--CREATED BY JOSHUA SARVER-->
+<!--CPSC 478 - SPRING 2015-->
+<!--DRAWS AN N SIDED POLYGON-->
+
+<!---->
+<!--ENABLING QUADTREE WILL PRINT A COMPARISON TO BRUTE FORCE AND PERCENT SAVED IN THE CONSOLE-->
+<!---->
+
+<html>
+<head><title>ngon Creation</title></head>
+    <body onload="init()">
+</body>
+    
+<script src="Quadtree.js"></script>
+<script src="Line.js"></script>
+<script>
+"use strict"
+//VARIABLES
+var lines = []      //contains all lines currently drawn
+
+var boundingBoxHeight   //width of canvas
+var boundingBoxWidth    //height of canvas
+
+var boundBoxX = 0       //canvas x position from left
+var boundBoxY = 0       //canvas y position from top
+
+var canvasAbstract              //the canvas not drawn to screen
+var canvas           //the on-screen canvas (in the DOM)
+var ctx                 //the context onto which we can draw
+
+var width               //same as bounding box width but name for use with quadtree
+var height              //same as bounding box height but name for use with quadtree
+var quadTree            //holds our quadtree
+var n                   //current n we are drawing
+var nCounter = 0        //current number of sides drawn
+var globalAnimationCancel           //kills the canvas animation when all n's are created
+var bruteForceTotalChecks = 0       //number of checks made for bruteforce (calculated)       
+var quadTreeTotalChecks = 0         //number checks made for quadtree
+var startTime = 0
+var endTime = 0
+var numberBruteForceChecks = 0
+var numberQuadTreeChecks = 0
+var boundingBoxScale = 0.95     //how much to scale down the bounding box
+
+
+
+//SETTINGS>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+var animateSolution = true      //disable this to speed up calculation time 
+var isLogEnabled = true         //some stuff should still print with this disable
+var useQuadTree = true          //quad tree or brute force?
+var solutionType = "Canvas"
+var limitLineLength = true     //limit line length or not    
+var maxLineLength = 50         //maximum line length
+var testNs = [100] 
+var isFilled = false            //should the n-gon be filled in
+//SETTINGS>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    
+startTime = (Date.now())
+
+function init(){
+    //we want our bounding box to be a large square
+    if(window.innerWidth < window.innerHeight){
+        boundingBoxWidth = window.innerWidth * boundingBoxScale
+        boundingBoxHeight = window.innerWidth * boundingBoxScale
+    }
+    else{
+        boundingBoxWidth = window.innerHeight * boundingBoxScale
+        boundingBoxHeight = window.innerHeight * boundingBoxScale
+    }
+    
+    //creates the canvas
+    var canvasAbstract = document.createElement('canvas');
+        canvasAbstract.id     = "myCanvas";
+        canvasAbstract.width  = boundingBoxWidth;
+        canvasAbstract.height = boundingBoxHeight;
+        canvasAbstract.style.zIndex   = 8;
+        canvasAbstract.style.position = "absolute";
+        canvasAbstract.style.left = boundBoxX + "px";
+        canvasAbstract.style.top = boundBoxY + "px";
+    
+    //appends canvas to the DOM
+    document.body.appendChild(canvasAbstract);
+
+    //get the canvas and context from the DOM
+    canvas = document.getElementById('myCanvas')
+    ctx = canvas.getContext('2d');
+    
+    //these names are just used for compatability with the QuadTree library
+    width = boundingBoxWidth
+    height = boundingBoxWidth
+    
+    createNgon()
+}
+    
+function createNgon(){
+    //for loop is used just in case multiple n's are specified
+    for(var i = 0; i < testNs.length; i++){
+        n = testNs[i]
+        if(useQuadTree){ quadTree = new QuadTree({x:boundBoxX,y:boundBoxY,width:boundingBoxWidth,height:boundingBoxHeight}); }
+
+        lines = []          //empty lines array
+        createTriangle()    //create initial triangle
+        addNs()             //makes all the n sides
+    }
+}
+    
+function addNs(isAnimated){
+    if(animateSolution){ addNWithAnimation() }
+    else { addNWithoutAnimation() }
+}
+
+
+//IF ANY LINES INTERSECT IMPROPERLY AFTER A SOLUTION IS FOUND
+//THIS WILL FLAG THE INTERSECTION
+function qualityCollisionCheck(){
+    //DRAWS A RED CROSS OVER ANY FOUND INTERSECTIONS
+    for(var i = 0; i < lines.length; i++){
+        var lineOne = lines[i]
+        for(var j = 0; j < lines.length; j++){
+            var lineTwo = lines[j]
+            if(doLinesIntersect(lineOne, lineTwo)){
+                ctx.beginPath()
+                ctx.moveTo(lineOne.x-50, lineOne.y);
+                ctx.lineTo(lineOne.x+50, lineOne.y);
+                ctx.closePath()
+                ctx.strokeStyle = "red"
+                ctx.stroke();
+
+                ctx.beginPath()
+                ctx.moveTo(lineTwo.x, lineTwo.y-50);
+                ctx.lineTo(lineTwo.x, lineTwo.y+50);
+                ctx.closePath()
+                ctx.strokeStyle = "red"
+                ctx.stroke()
+            }
+        }
+    }
+}
+    
+
+    
+    
+
+function addNWithoutAnimation(){
+    while(nCounter < n){
+        var isValid = false
+        while(!isValid){
+            var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
+
+            var xOne = lines[removeMeIndex].xStart
+            var yOne = lines[removeMeIndex].yStart
+
+            var randomX
+            var randomY
+            if(!limitLineLength){
+                randomX = Math.floor((Math.random() * width) + 1)
+                randomY = Math.floor((Math.random() * height) + 1)
+            }
+            else{
+                randomX = addOrSubtract(xOne, Math.floor((Math.random() * maxLineLength) + 1))
+                randomY = addOrSubtract(yOne, Math.floor((Math.random() * maxLineLength) + 1))
+            }
+
+            var xTwo = randomX
+            var yTwo = randomY
+
+            var xThree = lines[removeMeIndex].xEnd
+            var yThree = lines[removeMeIndex].yEnd
+
+            var removedLine = lines[removeMeIndex]
+
+
+            var lineOne = new Line(xOne, yOne, xTwo, yTwo)
+            var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
+            lines.splice(removeMeIndex, 1, lineOne, lineTwo)
+    //        lines.push(lineOne)
+    //        lines.push(lineTwo)
+
+            if(useQuadTree){ addLinesToQuadTree() }
+            if(detectCollision(lineOne, lineTwo)){
+                if(animateSolution){ drawLines() }
+                lines.splice(removeMeIndex, 2, removedLine)
+    //            lines.pop()
+    //            lines.pop()
+    //            lines.push(removedLine)
+                isValid = false
+                if(animateSolution){ drawLines() }
+            }
+            else{
+                if(animateSolution){ drawLines() }
+                isValid = true
+                nCounter += 1
+                if(isLogEnabled){ console.log(nCounter) }
+            }
+        }
+    }
+
+    if(true) { 
+        console.log("Random n found")
+
+        var savings = (numberBruteForceChecks - numberQuadTreeChecks) / numberBruteForceChecks * 100
+
+        console.log("Bruteforce Checks: " + numberBruteForceChecks + "\n" + 
+                    "Quadtree Checks: " + numberQuadTreeChecks + "\n" + 
+                    "Savings: " + Math.floor(savings) + "%" + "\n" +
+                    "Runtime: " + (Date.now() - startTime) + "ms"
+                   )
+    }
+    drawLines()
+    qualityCollisionCheck()
+}
+    
+function addNWithAnimation(){
+    globalAnimationCancel = window.requestAnimationFrame(addNWithAnimation);
+
+    var isValid = false
+    while(!isValid){
+        var removeMeIndex = Math.floor((Math.random() * lines.length) + 0)
+
+        var xOne = lines[removeMeIndex].xStart
+        var yOne = lines[removeMeIndex].yStart
+
+        var randomX
+        var randomY
+        if(!limitLineLength){
+            randomX = Math.floor((Math.random() * width) + 1)
+            randomY = Math.floor((Math.random() * height) + 1)
+        }
+        else{
+            randomX = addOrSubtract(xOne, Math.floor((Math.random() * maxLineLength) + 1))
+            randomY = addOrSubtract(yOne, Math.floor((Math.random() * maxLineLength) + 1))
+        }
+
+        var xTwo = randomX
+        var yTwo = randomY
+
+        var xThree = lines[removeMeIndex].xEnd
+        var yThree = lines[removeMeIndex].yEnd
+
+        var removedLine = lines[removeMeIndex]
+        
+
+        var lineOne = new Line(xOne, yOne, xTwo, yTwo)
+        var lineTwo = new Line (xTwo, yTwo, xThree, yThree)
+        lines.splice(removeMeIndex, 1, lineOne, lineTwo)
+
+        if(useQuadTree){ addLinesToQuadTree() }
+        if(detectCollision(lineOne, lineTwo)){
+            if(animateSolution){ drawLines() }
+            lines.splice(removeMeIndex, 2, removedLine)
+            isValid = false
+            if(animateSolution){ drawLines() }
+        }
+        else{
+            if(animateSolution){ drawLines() }
+            isValid = true
+            nCounter += 1
+            if(isLogEnabled){ console.log(nCounter) }
+        }
+    }
+    if(nCounter > n){
+        window.cancelAnimationFrame(globalAnimationCancel)
+
+        if(useQuadTree && isLogEnabled) { 
+            console.log("Random n found")
+
+            var savings = (numberBruteForceChecks - numberQuadTreeChecks) / numberBruteForceChecks * 100
+
+            console.log("Bruteforce Checks: " + numberBruteForceChecks + "\n" + 
+                        "Quadtree Checks: " + numberQuadTreeChecks + "\n" + 
+                        "Savings: " + Math.floor(savings) + "%"
+                       )
+
+            endTime = Date.now()
+            console.log(solutionType + "," + useQuadTree + "," + n + "," + ((endTime - startTime)/1000))
+
+        }
+        drawLines()
+        qualityCollisionCheck()
+    }
+}
+
+function createTriangle(){
+    for(var i = 0; i < 3; i++){
+        lines.push(new Line())
+    }
+    var x = lines[0].xStart
+    var y = lines[0].yStart
+    lines[1].xStart = x
+    lines[1].yStart = y
+
+    lines[2].xStart = lines[0].xEnd
+    lines[2].yStart = lines[0].yEnd
+    lines[2].xEnd = lines[1].xEnd
+    lines[2].yEnd = lines[1].yEnd
+    nCounter += 3
+
+    if(animateSolution){ drawLines() }
+    addLinesToQuadTree()
+}
+
+    
+function addOrSubtract(a, b){
+    if(Math.random() >= 0.5){
+        if(a+b > boundingBoxWidth){
+            return a-b
+        }
+        return a+b
+    }
+    else{
+        if(a-b < boundBoxX){
+            return a+b
+        }
+        return a-b
+    }
+}
+    
+//draws all lines in the lines array to the canvas
+function drawLines(){
+    ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
+    ctx.beginPath()
+    ctx.moveTo(lines[0].xStart, lines[0].yStart);
+    for(var i = 0; i < lines.length; i++){
+        ctx.lineTo(lines[i].xStart, lines[i].yStart);
+        ctx.lineTo(lines[i].xEnd, lines[i].yEnd);
+    }
+
+    
+    if(isFilled){ 
+        ctx.fillStyle = "grey"
+        ctx.fill()
+    }
+    else{
+        ctx.strokeStyle = "black"
+        ctx.stroke();
+    }
+    ctx.closePath()
+}
+    
+function addLinesToQuadTree(){
+    if(useQuadTree){ 
+        quadTree.clear()
+        for(var i = 0; i < lines.length; i++){
+            quadTree.insert(lines[i])
+        }
+    }
+}
+    
+
+
+
+
+
+function detectCollision(lineOne, lineTwo) {
+    if(!useQuadTree){
+        for(var i = 0; i < lines.length; i++){
+            var lineOne = lines[i]
+            for(var j = 0; j < lines.length; j++){
+                if(doLinesIntersect(lineOne, lines[j]) || doLinesIntersect(lineTwo, lines[j])){
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    else{
+        var objects = [];
+        var isCollision = true
+        var numberCheckedOne
+        var numberCheckedTwo
+        var status = false
+        quadTree.getAllObjects(objects);
+        for (var x = 0, len = objects.length; x < len; x++) {
+            if(objects[x] == lineOne || objects[x] == lineTwo){
+                var obj = []
+                obj = quadTree.findObjects(obj = [], objects[x]);
+                numberQuadTreeChecks += obj.length
+                for (var y = 0, length = obj.length; y < length; y++) {
+                       if(doLinesIntersect(objects[x], obj[y])){
+                           status = true
+                           break
+                       }
+                }
+            }
+
+        }
+        numberBruteForceChecks += (2 * lines.length)
+        return status
+    }
+}
+
+    
+//https://jsfiddle.net/justin_c_rounds/Gd2S2/
+function doLinesIntersect(lineOne, lineTwo){
+
+    var line1StartX = lineOne.xStart
+    var line1EndX = lineOne.xEnd
+    var line1StartY = lineOne.yStart
+    var line1EndY = lineOne.yEnd
+
+    var line2StartX = lineTwo.xStart
+    var line2EndX = lineTwo.xEnd
+    var line2StartY = lineTwo.yStart
+    var line2EndY = lineTwo.yEnd
+
+
+    var denominator, a, b, numerator1, numerator2, result = {
+        x: null,
+        y: null,
+        onLine1: false,
+        onLine2: false
+    };
+
+    denominator = ((line2EndY - line2StartY) * (line1EndX - line1StartX)) - ((line2EndX - line2StartX) * (line1EndY - line1StartY));
+    a = line1StartY - line2StartY;
+    b = line1StartX - line2StartX;
+    numerator1 = ((line2EndX - line2StartX) * a) - ((line2EndY - line2StartY) * b);
+    numerator2 = ((line1EndX - line1StartX) * a) - ((line1EndY - line1StartY) * b);
+    a = numerator1 / denominator;
+    b = numerator2 / denominator;
+
+    // if we cast these lines infinitely in both directions, they intersect here:
+    result.x = line1StartX + (a * (line1EndX - line1StartX));
+    result.y = line1StartY + (a * (line1EndY - line1StartY));
+    /*
+        // it is worth noting that this should be the same as:
+        x = line2StartX + (b * (line2EndX - line2StartX));
+        y = line2StartX + (b * (line2EndY - line2StartY));
+        */
+    // if line1 is a segment and line2 is infinite, they intersect if:
+    result.onLine1 = (a > 0 && a < 1)
+    result.onLine2 = (b > 0 && b < 1)
+
+    return (result.onLine1 && result.onLine2)
+}
+    
+
+    
+    
+    
+    
+    
+    
+</script>
+    
+</html>
