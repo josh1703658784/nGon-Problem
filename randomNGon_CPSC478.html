@@ -48,7 +48,7 @@ var ctx = canvas.getContext('2d');
 var width = boundingBoxWidth
 var height = boundingBoxWidth
 var quadTree
-var n = 100
+var n = 1000
 var nCounter = 0
 var globalAnimationCancel
 
@@ -59,13 +59,13 @@ var quadTreeTotalChecks = 0
 //testing performance stuff
 //var isTestingEnabled = true
 var animateSolution = true
-var isLogEnabled = true 
+var isLogEnabled = true
 var useQuadTree = true
 var solutionType = "Canvas"
 var limitLineLength = false     
 var maxLineLength = 100
-var maxLevels = 100
-var testNs = [1000]
+var maxLevels = 5
+var testNs = [15]
 var startTime = 0
 var endTime = 0
 var numberBruteForceChecks = 0
@@ -77,7 +77,7 @@ startTime = (Date.now())
 function init(){
     for(var i = 0; i < testNs.length; i++){
         n = testNs[i]
-        if(useQuadTree){ quadTree = new QuadTree({x:boundBoxX,y:boundBoxY,width:boundingBoxWidth,height:boundingBoxHeight}, maxLevels); }
+        if(useQuadTree){ quadTree = new QuadTree({x:boundBoxX,y:boundBoxY,width:boundingBoxWidth,height:boundingBoxHeight}); }
 
         lines = []
         createTriangle()
@@ -406,7 +406,7 @@ function Line(xStart, yStart, xEnd, yEnd){
         this.xEnd = xEnd
         this.yEnd = yEnd
     }
-    this.width = 1
+//    this.width = 1
     this.length = calculateLength(this)
     this.mSlope = calculateSlope(this)
     this.bYIntercept = calculateB(this)
@@ -426,8 +426,10 @@ function Line(xStart, yStart, xEnd, yEnd){
     else{
         this.y = this.yEnd
     }
-    this.canvasWidth = Math.abs(this.yEnd - this.yStart)
-    this.canvasHeight = Math.abs(this.xEnd - this.xStart)
+    this.canvasWidth = 0
+    this.canvasHeight = 0
+    this.width = Math.abs(this.yEnd - this.yStart)
+    this.height = Math.abs(this.xEnd - this.xStart)
     this.color = getRandomColor()
 
 
@@ -467,8 +469,7 @@ function detectCollision(lineOne, lineTwo) {
         for(var i = 0; i < lines.length; i++){
             var lineOne = lines[i]
             for(var j = 0; j < lines.length; j++){
-                var lineTwo = lines[j]
-                if(findIntersection(lineOne, lineTwo)){
+                if(findIntersection(lineOne, lines[j]) || findIntersection(lineTwo, lines[j])){
                     return true
                 }
             }
@@ -484,7 +485,7 @@ function detectCollision(lineOne, lineTwo) {
         quadTree.getAllObjects(objects);
         for (var x = 0, len = objects.length; x < len; x++) {
             if(objects[x] == lineOne || objects[x] == lineTwo){
-                quadTree.findObjects(obj = [], objects[x]);
+                obj = quadTree.findObjects(obj = [], objects[x]);
                 numberQuadTreeChecks += obj.length
                 for (var y = 0, length = obj.length; y < length; y++) {
                        if(findIntersection(objects[x], obj[y])){
@@ -494,7 +495,7 @@ function detectCollision(lineOne, lineTwo) {
             }
 
         }
-        numberBruteForceChecks += (lines.length * lines.length)
+        numberBruteForceChecks += (2 * lines.length)
         return status
     }
 }
@@ -552,21 +553,21 @@ function findIntersection(lineOne, lineTwo){
 
     if(result.onLine1 && result.onLine2){
 //                        var xIntersection = calculateXIntersection(theLine, lines[j])
-        if(animateSolution){
-            ctx.beginPath()
-            ctx.moveTo(result.x-50, result.y);
-            ctx.lineTo(result.x+50, result.y);
-            ctx.closePath()
-            ctx.strokeStyle = "red"
-            ctx.stroke();
-
-            ctx.beginPath()
-            ctx.moveTo(result.x, result.y-50);
-            ctx.lineTo(result.x, result.y+50);
-            ctx.closePath()
-            ctx.strokeStyle = "red"
-            ctx.stroke();
-        }
+//        if(animateSolution){
+//            ctx.beginPath()
+//            ctx.moveTo(result.x-50, result.y);
+//            ctx.lineTo(result.x+50, result.y);
+//            ctx.closePath()
+//            ctx.strokeStyle = "red"
+//            ctx.stroke();
+//
+//            ctx.beginPath()
+//            ctx.moveTo(result.x, result.y-50);
+//            ctx.lineTo(result.x, result.y+50);
+//            ctx.closePath()
+//            ctx.strokeStyle = "red"
+//            ctx.stroke();
+//        }
         return true
     }
 
